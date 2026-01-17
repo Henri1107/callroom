@@ -5,8 +5,7 @@
   "background_color": "#19f7f9",
   "display": "standalone",
   "orientation": "landscape",
-  "scope": "./",
-  "start_url": "./index.html",
+  "start_url": "/callroom/",
   "icons": [
     {
       "src": "./icons/icon-72x72.png",
