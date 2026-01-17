@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <title>Callroom</title>
+</head>
+<body>
+    <nav>
+        <button onclick="navigate('home')">Home</button>
+        <button onclick="navigate('settings')">Einstellungen</button>
+        <button onclick="navigate('overview')">Übersicht</button>
+        <button onclick="navigate('missing_fencers')">Fehlende Fechter</button>
+        <button onclick="navigate('tableau')">Tableau</button>
+        <button onclick="navigate('tableau_input')">Tableau eintragen</button>
+        <button onclick="navigate('workspace')">Callroom</button>
+        <button onclick="navigate('podium')">Podium</button>
+        <button onclick="navigate('sync')">Verbindung</button>
+    </nav>
+
+    <main id="app">
+        </main>
+
+    <!-- Firebase SDK (compat version - works with global firebase object) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-compat.js"></script>
+    
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- Firebase Konfiguration -->
+    <script src="firebase-config.js"></script>
+
+    <script src="app.js"></script>
+</body>
+</html>
