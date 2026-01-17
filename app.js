@@ -722,59 +722,49 @@ function generateKOTree(participants, mode) {
         }
     }
     
-    // Für 16er KO: Hinzufügen von Platzierungsgefechten ab 8er KO
+    // Für 16er KO (Team): Platzierungsgefechte
+    // - Verlierer Viertelfinale (8er KO) spielen um Plätze 5-8
+    // - Verlierer Halbfinale spielen um Platz 3/4
     if(mode === 'team' && participants === 16) {
-        // 3./4. Platz (8er KO Verlierer vs andere Verlierer)
+        // Platz 5-8 Halbfinals (Verlierer der Viertelfinals)
+        tree.consolationRounds.push({
+            title: 'Platz 5-8 (HF)',
+            matches: [{
+                id: 'consolation-5-8-hf-0',
+                p1: null,
+                p2: null,
+                winner: null,
+                laneOverride: null
+            }, {
+                id: 'consolation-5-8-hf-1',
+                p1: null,
+                p2: null,
+                winner: null,
+                laneOverride: null
+            }]
+        });
+        // Platz 5/6 und 7/8 Finals
+        tree.consolationRounds.push({
+            title: 'Platz 5/6 & 7/8',
+            matches: [{
+                id: 'consolation-5-6-final',
+                p1: null,
+                p2: null,
+                winner: null,
+                laneOverride: null
+            }, {
+                id: 'consolation-7-8-final',
+                p1: null,
+                p2: null,
+                winner: null,
+                laneOverride: null
+            }]
+        });
+        // Platz 3/4 (Verlierer Halbfinals)
         tree.consolationRounds.push({
             title: '3./4. Platz',
             matches: [{
-                id: 'consolation-0-0',
-                p1: null,
-                p2: null,
-                winner: null,
-                laneOverride: null
-            }]
-        });
-        // 5./6. Platz
-        tree.consolationRounds.push({
-            title: '5./6. Platz',
-            matches: [{
-                id: 'consolation-1-0',
-                p1: null,
-                p2: null,
-                winner: null,
-                laneOverride: null
-            }, {
-                id: 'consolation-1-1',
-                p1: null,
-                p2: null,
-                winner: null,
-                laneOverride: null
-            }]
-        });
-        // 7./8. Platz
-        tree.consolationRounds.push({
-            title: '7./8. Platz',
-            matches: [{
-                id: 'consolation-2-0',
-                p1: null,
-                p2: null,
-                winner: null,
-                laneOverride: null
-            }, {
-                id: 'consolation-2-1',
-                p1: null,
-                p2: null,
-                winner: null,
-                laneOverride: null
-            }, {
-                id: 'consolation-2-2',
-                p1: null,
-                p2: null,
-                winner: null,
-                laneOverride: null
-            }, {
-                id: 'consolation-2-3',
+                id: 'consolation-3-4',
                 p1: null,
                 p2: null,
                 winner: null,
@@ -807,135 +797,130 @@ function renderKOTree(koTree) {
     const laneColors = getLaneColors();
     const laneNames = getLaneNames();
     
-    let html = '<div class="ko-tree-container">';
+    let html = '<div class="tableau-container">';
     
     // ===== HAUPTTURNIER =====
-    html += '<div class="ko-tournament-section">';
+    html += '<h2>Hauptturnier</h2>';
+    html += '<div class="tableau-rounds">';
+    
     for(let round = 0; round < koTree.rounds.length; round++) {
-        html += `<div class="ko-round">`;
-        
-        // Berechne KO-Größe für diese Runde
         const remainingFencers = Math.pow(2, koTree.totalRounds - round);
         let koSizeLabel;
         if(remainingFencers === 2) koSizeLabel = 'Finale';
         else if(remainingFencers === 4) koSizeLabel = 'Halbfinale';
         else koSizeLabel = `${remainingFencers}er KO`;
-        html += `<div class="round-title">${koSizeLabel}</div>`;
-        
-        // Berechne Matches pro Bahn: verteile alle Matches dieser Runde auf 4 Bahnen
+
+        html += `<div class="tableau-round"><h3>${koSizeLabel}</h3>`;
+
         const matchesInRound = koTree.rounds[round].length;
         const matchesPerBahn = Math.ceil(matchesInRound / 4);
-        
+
         for(let match = 0; match < matchesInRound; match++) {
             const matchData = koTree.rounds[round][match];
-            
-            // Bestimme Bahn für dieses Match
+
+            // Berechne Bahnindex
             let laneIdx = 0;
-            if(matchData.laneOverride !== null && matchData.laneOverride !== undefined) {
-                // Manuelle Bahnzuweisung nutzen (jetzt auch Bahn 5 möglich)
-                laneIdx = Math.min(matchData.laneOverride, manualLaneColors.length - 1);
-                const laneColor = manualLaneColors[laneIdx];
-                const laneName = manualLaneNames[laneIdx];
-                const matchStyle = `style="border-left: 5px solid ${laneColor};"`;
-                
-                html += `
-                    <div class="ko-match" data-round="${round}" data-match="${match}" ${matchStyle}>
-                        <div class="ko-lane-label" style="background-color: ${laneColor}; cursor: pointer;" onclick="showLaneSelector('main', ${round}, ${match})" title="Klick um Bahn zu ändern">${laneName}</div>
-                        <div class="ko-player" data-player="1" style="cursor: pointer; user-select: none;" onclick="selectWinner(${round}, ${match}, 1)">
-                            ${matchData.p1 ? getFencerDisplay(matchData.p1) : '—'}
-                        </div>
-                        <div class="ko-vs">vs</div>
-                        <div class="ko-player" data-player="2" style="cursor: pointer; user-select: none;" onclick="selectWinner(${round}, ${match}, 2)">
-                            ${matchData.p2 ? getFencerDisplay(matchData.p2) : '—'}
-                        </div>
-                        ${matchData.winner ? `
-                            <div class="ko-winner-wrapper">
-                                <div class="ko-winner">✓ ${getFencerDisplay(matchData.winner)}</div>
-                                <button class="ko-clear-btn" onclick="clearWinner(${round}, ${match})" title="Sieger entfernen">×</button>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            } else {
-                // Automatisch: Berechne Bahn basierend auf Match-Position
-                laneIdx = Math.floor(match / matchesPerBahn);
-                laneIdx = Math.min(laneIdx, 3); // Maximal Bahn 3 (Index 0-3)
-                const laneColor = laneColors[laneIdx];
-                const laneName = laneNames[laneIdx];
-                const matchStyle = `style="border-left: 5px solid ${laneColor};"`;
-                
-                html += `
-                    <div class="ko-match" data-round="${round}" data-match="${match}" ${matchStyle}>
-                        <div class="ko-lane-label" style="background-color: ${laneColor}; cursor: pointer;" onclick="showLaneSelector('main', ${round}, ${match})" title="Klick um Bahn zu ändern">${laneName}</div>
-                        <div class="ko-player" data-player="1" style="cursor: pointer; user-select: none;" onclick="selectWinner(${round}, ${match}, 1)">
-                            ${matchData.p1 ? getFencerDisplay(matchData.p1) : '—'}
-                        </div>
-                        <div class="ko-vs">vs</div>
-                        <div class="ko-player" data-player="2" style="cursor: pointer; user-select: none;" onclick="selectWinner(${round}, ${match}, 2)">
-                            ${matchData.p2 ? getFencerDisplay(matchData.p2) : '—'}
-                        </div>
-                        ${matchData.winner ? `
-                            <div class="ko-winner-wrapper">
-                                <div class="ko-winner">✓ ${getFencerDisplay(matchData.winner)}</div>
-                                <button class="ko-clear-btn" onclick="clearWinner(${round}, ${match})" title="Sieger entfernen">×</button>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            }
-        }
-        html += `</div>`;
-    }
-    html += '</div>';
-    
-    // ===== PLATZIERUNGSGEFECHTE (3./4., 5./6., 7./8. Platz) =====
-    if(koTree.consolationRounds && koTree.consolationRounds.length > 0) {
-        html += '<div class="ko-tournament-section">';
-        for(let consolationIdx = 0; consolationIdx < koTree.consolationRounds.length; consolationIdx++) {
-            const consolationRound = koTree.consolationRounds[consolationIdx];
-            html += `<div class="ko-round">`;
-            html += `<div class="round-title">${consolationRound.title}</div>`;
+            let laneColor, laneName;
             
-            // Verteile Platzierungsgefechte zyklisch auf Bahnen
-            for(let match = 0; match < consolationRound.matches.length; match++) {
-                const matchData = consolationRound.matches[match];
-                
-                let laneIdx = 0;
-                if(matchData.laneOverride !== null && matchData.laneOverride !== undefined) {
-                    laneIdx = Math.min(matchData.laneOverride, 3);
-                } else {
-                    // Zyklisch auf die 4 Bahnen verteilen
-                    laneIdx = (consolationIdx * 2 + match) % 4;
-                }
-                
-                const laneColor = laneColors[laneIdx];
-                const laneName = laneNames[laneIdx];
-                const matchStyle = `style="border-left: 5px solid ${laneColor};"`;
-                
-                html += `
-                    <div class="ko-match" data-consolation="${consolationIdx}" data-match="${match}" ${matchStyle}>
-                        <div class="ko-lane-label" style="background-color: ${laneColor}; cursor: pointer;" onclick="showLaneSelector('consolation', ${consolationIdx}, ${match})" title="Klick um Bahn zu ändern">${laneName}</div>
-                        <div class="ko-player" data-player="1" style="cursor: pointer; user-select: none;" onclick="selectConsolationWinner(${consolationIdx}, ${match}, 1)">
-                            ${matchData.p1 ? getFencerDisplay(matchData.p1) : '—'}
+            if(matchData.laneOverride !== null && matchData.laneOverride !== undefined) {
+                laneIdx = Math.min(matchData.laneOverride, manualLaneColors.length - 1);
+                laneColor = manualLaneColors[laneIdx];
+                laneName = manualLaneNames[laneIdx];
+            } else {
+                laneIdx = Math.floor(match / matchesPerBahn);
+                laneIdx = Math.min(laneIdx, 3);
+                laneColor = laneColors[laneIdx];
+                laneName = laneNames[laneIdx];
+            }
+
+            const p1 = matchData.p1 ? getFencerDisplay(matchData.p1) : '—';
+            const p2 = matchData.p2 ? getFencerDisplay(matchData.p2) : '—';
+            const winner = matchData.winner ? `<div class="tableau-winner">✓ ${getFencerDisplay(matchData.winner)}</div>` : '';
+
+            html += `
+                <div class="tableau-match" style="border-left: 5px solid ${laneColor};">
+                    <div class="tableau-lane" style="background-color: ${laneColor}; cursor: pointer;" onclick="showLaneSelector('main', ${round}, ${match})" title="Klick um Bahn zu ändern">${laneName}</div>
+                    <div class="tableau-matchup">
+                        <div class="tableau-player" onclick="selectWinner(${round}, ${match}, 1)" style="cursor: pointer; user-select: none;">
+                            ${p1}
                         </div>
-                        <div class="ko-vs">vs</div>
-                        <div class="ko-player" data-player="2" style="cursor: pointer; user-select: none;" onclick="selectConsolationWinner(${consolationIdx}, ${match}, 2)">
-                            ${matchData.p2 ? getFencerDisplay(matchData.p2) : '—'}
+                        <div class="tableau-vs">vs</div>
+                        <div class="tableau-player" onclick="selectWinner(${round}, ${match}, 2)" style="cursor: pointer; user-select: none;">
+                            ${p2}
                         </div>
                         ${matchData.winner ? `
-                            <div class="ko-winner-wrapper">
-                                <div class="ko-winner">✓ ${getFencerDisplay(matchData.winner)}</div>
-                                <button class="ko-clear-btn" onclick="clearConsolationWinner(${consolationIdx}, ${match})" title="Sieger entfernen">×</button>
+                            <div style="margin-top: 8px;">
+                                ${winner}
+                                <button class="tableau-clear-btn" onclick="clearWinner(${round}, ${match}); event.stopPropagation();" title="Sieger entfernen">×</button>
                             </div>
                         ` : ''}
                     </div>
-                `;
-            }
-            html += `</div>`;
+                </div>
+            `;
         }
+
         html += '</div>';
     }
-    
+
+    html += '</div>';
+
+    // ===== PLATZIERUNGSGEFECHTE =====
+    if(koTree.consolationRounds && koTree.consolationRounds.length > 0) {
+        html += '<h2>Platzierungsgefechte</h2>';
+        html += '<div class="tableau-rounds">';
+
+        for(let consIdx = 0; consIdx < koTree.consolationRounds.length; consIdx++) {
+            const consRound = koTree.consolationRounds[consIdx];
+            html += `<div class="tableau-round"><h3>${consRound.title}</h3>`;
+
+            for(let match = 0; match < consRound.matches.length; match++) {
+                const matchData = consRound.matches[match];
+
+                let laneIdx = 0;
+                let laneColor, laneName;
+                
+                if(matchData.laneOverride !== null && matchData.laneOverride !== undefined) {
+                    laneIdx = Math.min(matchData.laneOverride, 3);
+                    laneColor = laneColors[laneIdx];
+                    laneName = laneNames[laneIdx];
+                } else {
+                    laneIdx = (consIdx * 2 + match) % 4;
+                    laneColor = laneColors[laneIdx];
+                    laneName = laneNames[laneIdx];
+                }
+
+                const p1 = matchData.p1 ? getFencerDisplay(matchData.p1) : '—';
+                const p2 = matchData.p2 ? getFencerDisplay(matchData.p2) : '—';
+                const winner = matchData.winner ? `<div class="tableau-winner">✓ ${getFencerDisplay(matchData.winner)}</div>` : '';
+
+                html += `
+                    <div class="tableau-match" style="border-left: 5px solid ${laneColor};">
+                        <div class="tableau-lane" style="background-color: ${laneColor}; cursor: pointer;" onclick="showLaneSelector('consolation', ${consIdx}, ${match})" title="Klick um Bahn zu ändern">${laneName}</div>
+                        <div class="tableau-matchup">
+                            <div class="tableau-player" onclick="selectConsolationWinner(${consIdx}, ${match}, 1)" style="cursor: pointer; user-select: none;">
+                                ${p1}
+                            </div>
+                            <div class="tableau-vs">vs</div>
+                            <div class="tableau-player" onclick="selectConsolationWinner(${consIdx}, ${match}, 2)" style="cursor: pointer; user-select: none;">
+                                ${p2}
+                            </div>
+                            ${matchData.winner ? `
+                                <div style="margin-top: 8px;">
+                                    ${winner}
+                                    <button class="tableau-clear-btn" onclick="clearConsolationWinner(${consIdx}, ${match}); event.stopPropagation();" title="Sieger entfernen">×</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+        }
+
+        html += '</div>';
+    }
+
     html += '</div>';
     return html;
 }
@@ -993,12 +978,19 @@ function selectWinner(round, match, playerNum) {
     
     const matchData = koTreeState.rounds[round][match];
     const fencer = playerNum === 1 ? matchData.p1 : matchData.p2;
+    const prevWinner = matchData.winner;
+    const prevLoser = prevWinner ? ((prevWinner.id === (matchData.p1 && matchData.p1.id)) ? matchData.p2 : matchData.p1) : null;
     
     if(!fencer) return;
     
     // Wenn bereits ein Sieger gesetzt ist und man klickt auf den gleichen Spieler, passiert nichts
     if(matchData.winner && matchData.winner.id === fencer.id) {
         return;
+    }
+
+    // Entferne bisherigen Verlierer aus Platzierungsgefechten (falls vorhanden)
+    if(prevLoser) {
+        removeFencerFromConsolation(prevLoser.id);
     }
     
     // Setze neuen Sieger (auch wenn bereits einer existiert)
@@ -1015,6 +1007,12 @@ function selectWinner(round, match, playerNum) {
             koTreeState.rounds[round + 1][nextMatchIdx].p2 = fencer;
         }
     }
+
+    // Propagiere Verlierer in Platzierungsgefechte (16er KO Team)
+    const loser = playerNum === 1 ? matchData.p2 : matchData.p1;
+    if(loser) {
+        propagateLoserToConsolation(round, match, loser);
+    }
     
     refreshTableauDisplay();
     
@@ -1024,10 +1022,86 @@ function selectWinner(round, match, playerNum) {
     }
 }
 
+function isTeam16KO() {
+    return koTreeState && koTreeState.mode === 'team' && koTreeState.rounds && koTreeState.rounds[0] && koTreeState.rounds[0].length === 8;
+}
+
+function removeFencerFromConsolation(fencerId) {
+    if(!koTreeState || !koTreeState.consolationRounds || !fencerId) return;
+    for(let c = 0; c < koTreeState.consolationRounds.length; c++) {
+        const round = koTreeState.consolationRounds[c];
+        for(let m = 0; m < round.matches.length; m++) {
+            const md = round.matches[m];
+            if(md.p1 && md.p1.id === fencerId) md.p1 = null;
+            if(md.p2 && md.p2.id === fencerId) md.p2 = null;
+            if(md.winner && md.winner.id === fencerId) md.winner = null;
+        }
+    }
+}
+
+function propagateLoserToConsolation(round, match, loser) {
+    if(!isTeam16KO() || !loser || !koTreeState.consolationRounds || koTreeState.consolationRounds.length < 3) return;
+
+    // Viertelfinale (8er KO) = round 1 => Verlierer in Platz 5-8 Halbfinals
+    if(round === 1) {
+        // Mapping: match0 -> HF0 p1, match1 -> HF0 p2, match2 -> HF1 p1, match3 -> HF1 p2
+        const targetRound = koTreeState.consolationRounds[0];
+        if(!targetRound || targetRound.matches.length < 2) return;
+        const slots = [
+            {matchIdx:0, player:'p1'},
+            {matchIdx:0, player:'p2'},
+            {matchIdx:1, player:'p1'},
+            {matchIdx:1, player:'p2'}
+        ];
+        const slot = slots[match];
+        if(slot && targetRound.matches[slot.matchIdx]) {
+            targetRound.matches[slot.matchIdx][slot.player] = loser;
+            // Reset winners downstream involving this loser
+            removeFencerFromConsolation(loser.id);
+            targetRound.matches[slot.matchIdx][slot.player] = loser;
+        }
+    }
+
+    // Halbfinale (round 2) -> Bronze-Match
+    if(round === 2) {
+        const bronzeRound = koTreeState.consolationRounds[2];
+        if(!bronzeRound || bronzeRound.matches.length === 0) return;
+        const slot = match === 0 ? 'p1' : 'p2';
+        removeFencerFromConsolation(loser.id);
+        bronzeRound.matches[0][slot] = loser;
+    }
+}
+
+function updatePlacementFinalsFromSemis(semiMatchIdx, winner, loser) {
+    const finals = koTreeState && koTreeState.consolationRounds && koTreeState.consolationRounds[1];
+    if(!finals || finals.matches.length < 2) return;
+
+    // Entferne vorhandene Vorkommen der beiden Fechter aus den Finals
+    const clearIds = [winner, loser].filter(Boolean).map(f => f.id);
+    for(const fm of finals.matches) {
+        if(fm.p1 && clearIds.includes(fm.p1.id)) fm.p1 = null;
+        if(fm.p2 && clearIds.includes(fm.p2.id)) fm.p2 = null;
+        if(fm.winner && clearIds.includes(fm.winner.id)) fm.winner = null;
+    }
+
+    // Mapping: Gewinner -> 5/6 Finale, Verlierer -> 7/8 Finale
+    const winnerSlot = semiMatchIdx === 0 ? {matchIdx:0, player:'p1'} : {matchIdx:0, player:'p2'};
+    const loserSlot  = semiMatchIdx === 0 ? {matchIdx:1, player:'p1'} : {matchIdx:1, player:'p2'};
+
+    if(winner && finals.matches[winnerSlot.matchIdx]) {
+        finals.matches[winnerSlot.matchIdx][winnerSlot.player] = winner;
+    }
+    if(loser && finals.matches[loserSlot.matchIdx]) {
+        finals.matches[loserSlot.matchIdx][loserSlot.player] = loser;
+    }
+}
+
 function clearWinner(round, match) {
     if(!koTreeState) return;
     
     const fencerToRemove = koTreeState.rounds[round][match].winner;
+    const matchData = koTreeState.rounds[round][match];
+    const loserCandidate = fencerToRemove ? ((matchData.p1 && fencerToRemove.id === matchData.p1.id) ? matchData.p2 : matchData.p1) : null;
     
     // Entferne Sieger aus aktueller Runde
     koTreeState.rounds[round][match].winner = null;
@@ -1053,6 +1127,11 @@ function clearWinner(round, match) {
             }
         }
     }
+
+    // Entferne Verlierer aus Platzierungsgefechten (falls 16er KO Team)
+    if(loserCandidate) {
+        removeFencerFromConsolation(loserCandidate.id);
+    }
     
     refreshTableauDisplay();
     
@@ -1067,6 +1146,7 @@ function selectConsolationWinner(consolationIdx, match, playerNum) {
     
     const matchData = koTreeState.consolationRounds[consolationIdx].matches[match];
     const fencer = playerNum === 1 ? matchData.p1 : matchData.p2;
+    const loser = playerNum === 1 ? matchData.p2 : matchData.p1;
     
     if(!fencer) return;
     
@@ -1078,11 +1158,14 @@ function selectConsolationWinner(consolationIdx, match, playerNum) {
     // Setze neuen Sieger
     koTreeState.consolationRounds[consolationIdx].matches[match].winner = fencer;
     
-    // Propagiere Sieger in nächste Consolation Runde falls vorhanden
-    if(consolationIdx + 1 < koTreeState.consolationRounds.length) {
+    // Propagiere Sieger/Verlierer innerhalb der Platzierungsrunde
+    if(consolationIdx === 0 && koTreeState.consolationRounds.length >= 2) {
+        updatePlacementFinalsFromSemis(match, fencer, loser);
+    }
+    // Weitere Consolation-Runden propagieren (falls vorhanden)
+    else if(consolationIdx + 1 < koTreeState.consolationRounds.length) {
         const nextMatchIdx = Math.floor(match / 2);
         const playerInNextMatch = (match % 2) + 1;
-        
         if(nextMatchIdx < koTreeState.consolationRounds[consolationIdx + 1].matches.length) {
             if(playerInNextMatch === 1) {
                 koTreeState.consolationRounds[consolationIdx + 1].matches[nextMatchIdx].p1 = fencer;
@@ -1103,10 +1186,26 @@ function selectConsolationWinner(consolationIdx, match, playerNum) {
 function clearConsolationWinner(consolationIdx, match) {
     if(!koTreeState || !koTreeState.consolationRounds || !koTreeState.consolationRounds[consolationIdx]) return;
     
-    const fencerToRemove = koTreeState.consolationRounds[consolationIdx].matches[match].winner;
+    const matchData = koTreeState.consolationRounds[consolationIdx].matches[match];
+    const fencerToRemove = matchData.winner;
     
     // Entferne Sieger aus aktueller Runde
     koTreeState.consolationRounds[consolationIdx].matches[match].winner = null;
+
+    // Wenn es ein Platz 5-8 Halbfinale ist, lösche Einträge in den Finals (5/6 und 7/8)
+    if(consolationIdx === 0 && koTreeState.consolationRounds.length >= 2) {
+        const finals = koTreeState.consolationRounds[1];
+        if(finals && finals.matches.length >= 2) {
+            const playersToClear = [matchData.p1, matchData.p2].filter(Boolean);
+            for(const f of playersToClear) {
+                for(const fm of finals.matches) {
+                    if(fm.p1 && fm.p1.id === f.id) fm.p1 = null;
+                    if(fm.p2 && fm.p2.id === f.id) fm.p2 = null;
+                    if(fm.winner && fm.winner.id === f.id) fm.winner = null;
+                }
+            }
+        }
+    }
     
     // Entferne diesen Fechter aus allen folgenden Consolation Runden
     if(fencerToRemove) {
@@ -1142,6 +1241,143 @@ function refreshTableauDisplay() {
         const mode = getTableauMode();
         const modeLabel = mode === 'einzel' ? '64er KO-Baum' : '16er KO-Baum';
         contentDiv.innerHTML = `<h2>${modeLabel}</h2>` + renderKOTree(koTreeState);
+    }
+}
+
+function renderOverviewDisplay(container) {
+    // Callroom-ähnliche Ansicht mit Durchgang-Navigation und Anwesenheits-Farben
+    if(!koTreeState || !koTreeState.rounds || koTreeState.rounds.length === 0) {
+        container.innerHTML = '<p>Kein Turnier geladen. Bitte erstelle ein Tableau unter "Tableau eintragen".</p>';
+        return;
+    }
+
+    const laneColors = getLaneColors();
+    const laneNames = getLaneNames();
+    const totalRounds = koTreeState.rounds.length;
+    const statuses = getCallroomStatuses();
+    
+    // Initialisiere overviewRoundIndex und overviewGroupIndex falls nicht vorhanden
+    if(window.overviewRoundIndex === undefined) window.overviewRoundIndex = 0;
+    if(window.overviewGroupIndex === undefined) window.overviewGroupIndex = 0;
+
+    let currentRound = Math.min(window.overviewRoundIndex, totalRounds - 1);
+    let currentGroup = window.overviewGroupIndex;
+
+    const matches = koTreeState.rounds[currentRound] || [];
+    
+    // Gruppiere nach Vierteln (wie im Callroom)
+    const laneCount = 4;
+    const totalMatches = matches.length;
+    const quarterSize = Math.ceil(totalMatches / laneCount) || 1;
+    const groups = [];
+    for(let pass = 0; pass < quarterSize; pass++) {
+        const group = [];
+        for(let lane = 0; lane < laneCount; lane++) {
+            const idx = (lane * quarterSize) + pass;
+            group.push(totalMatches > idx ? matches[idx] : null);
+        }
+        groups.push(group);
+    }
+
+    if(currentGroup >= groups.length) currentGroup = groups.length - 1;
+    if(currentGroup < 0) currentGroup = 0;
+
+    window.overviewGroupIndex = currentGroup;
+    window.overviewRoundIndex = currentRound;
+
+    const currentGroupMatches = groups[currentGroup] || [];
+
+    // Statusfarben: Abwesend=rot, Anwesend=gelb, kontrolliert=grün
+    const statusColors = {'Abwesend': '#ff4444', 'Anwesend': '#ffdd44', 'kontrolliert': '#44dd44'};
+
+    // Steuerleiste mit Rund-Selektor und Prev/Next Buttons
+    let html = '<div class="overview-controls" style="text-align:center; margin: 15px 0; display: flex; justify-content: center; align-items: center; gap: 12px;">';
+    html += `<button id="overview-prev" style="padding: 8px 12px; background-color: #5bd2fe; color: #023b82; border: 2px solid #023b82; border-radius: 4px; cursor: pointer; font-weight: bold;">←</button>`;
+    
+    html += '<select id="overview-round-select" style="padding: 8px 12px; font-size: 14px; border: 2px solid #023b82; border-radius: 4px;">';
+    
+    for(let r = 0; r < totalRounds; r++) {
+        const remainingFencers = Math.pow(2, totalRounds - r);
+        let koSizeLabel;
+        if(remainingFencers === 2) koSizeLabel = 'Finale';
+        else if(remainingFencers === 4) koSizeLabel = 'Halbfinale';
+        else koSizeLabel = `${remainingFencers}er KO`;
+        html += `<option value="${r}" ${r === currentRound ? 'selected' : ''}>${koSizeLabel}</option>`;
+    }
+    
+    html += '</select>';
+    html += `<span style="font-weight:bold; font-size: 14px; min-width: 120px;">Durchgang ${currentGroup + 1} / ${Math.max(1, groups.length)}</span>`;
+    html += `<button id="overview-next" style="padding: 8px 12px; background-color: #5bd2fe; color: #023b82; border: 2px solid #023b82; border-radius: 4px; cursor: pointer; font-weight: bold;">→</button>`;
+    html += '</div>';
+
+    // Gefechte in Callroom-Layout (4 Bahnen nebeneinander)
+    html += '<div class="overview-callroom-row">';
+
+    for(let lane = 0; lane < laneCount; lane++) {
+        const matchData = currentGroupMatches[lane];
+        if(!matchData) {
+            html += `<div class="overview-callroom-lane empty-lane">—</div>`;
+            continue;
+        }
+
+        const matchIndex = (lane * quarterSize) + currentGroup;
+        const p1Display = matchData.p1 ? getFencerDisplay(matchData.p1) : '—';
+        const p2Display = matchData.p2 ? getFencerDisplay(matchData.p2) : '—';
+        const laneColor = laneColors[lane];
+        const laneName = laneNames[lane];
+
+        // Hol Anwesenheitsstatus für beide Spieler
+        const statusKey = matchData.id || `m_${matchIndex}`;
+        const s1 = (statuses[statusKey] && statuses[statusKey].p1) || 'Abwesend';
+        const s2 = (statuses[statusKey] && statuses[statusKey].p2) || 'Abwesend';
+        const bgColor1 = statusColors[s1] || '#fff';
+        const bgColor2 = statusColors[s2] || '#fff';
+
+        html += `
+            <div class="overview-callroom-lane">
+                <div class="overview-callroom-header" style="background-color: ${laneColor};">${laneName}</div>
+                <div class="overview-callroom-matchup">
+                    <div class="overview-callroom-player" style="background-color: ${bgColor1};">${p1Display}</div>
+                    <div class="overview-callroom-vs">vs</div>
+                    <div class="overview-callroom-player" style="background-color: ${bgColor2};">${p2Display}</div>
+                    ${matchData.winner ? `<div class="overview-callroom-winner">✓ ${getFencerDisplay(matchData.winner)}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // Event Listener für Rund-Selektor
+    const roundSelect = document.getElementById('overview-round-select');
+    if(roundSelect) {
+        roundSelect.addEventListener('change', function(e) {
+            const newRound = parseInt(this.value, 10);
+            window.overviewRoundIndex = newRound;
+            window.overviewGroupIndex = 0; // Reset Durchgang beim Rundenwechsel
+            renderOverviewDisplay(container);
+        });
+    }
+
+    // Event Listener für Prev/Next Buttons
+    const prevBtn = document.getElementById('overview-prev');
+    const nextBtn = document.getElementById('overview-next');
+    
+    if(prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            window.overviewGroupIndex = Math.max(0, window.overviewGroupIndex - 1);
+            renderOverviewDisplay(container);
+        });
+    }
+
+    if(nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            const maxGroups = groups.length;
+            window.overviewGroupIndex = Math.min(maxGroups - 1, window.overviewGroupIndex + 1);
+            renderOverviewDisplay(container);
+        });
     }
 }
 
@@ -1243,18 +1479,22 @@ function renderCallroomOverview() {
         const bgColor2 = statusColors[s2] || '#fff';
         const laneColor = laneColors[lane] || '#5bd2fe';
 
+        const swapDisplay = window.callroomSeitenBestaetigt ? 'display: none;' : '';
+        const fencerClickable = window.callroomSeitenBestaetigt ? '' : `onclick="toggleFencerStatus(${matchIndex}, 1)"`;
+        const fencerClickable2 = window.callroomSeitenBestaetigt ? '' : `onclick="toggleFencerStatus(${matchIndex}, 2)"`;
+
         html += `
             <div class="callroom-lane" data-match-index="${matchIndex}">
                 <div class="lane-header" style="background-color: ${laneColor};">${getLaneNames()[lane] || ('Bahn ' + (lane+1))}</div>
                 <div class="callroom-fencers">
-                    <div class="callroom-fencer" style="background-color: ${bgColor1};" onclick="toggleFencerStatus(${matchIndex}, 1)">
+                    <div class="callroom-fencer" style="background-color: ${bgColor1};" ${fencerClickable}>
                         <div class="fencer-name">${p1 ? getFencerDisplay(p1) : '—'}</div>
                         <div class="fencer-status">${s1}</div>
                     </div>
-                    <div class="callroom-swap">
+                    <div class="callroom-swap" style="${swapDisplay}">
                         <button onclick="swapSides(${matchIndex}); event.stopPropagation();">⇄</button>
                     </div>
-                    <div class="callroom-fencer" style="background-color: ${bgColor2};" onclick="toggleFencerStatus(${matchIndex}, 2)">
+                    <div class="callroom-fencer" style="background-color: ${bgColor2};" ${fencerClickable2}>
                         <div class="fencer-name">${p2 ? getFencerDisplay(p2) : '—'}</div>
                         <div class="fencer-status">${s2}</div>
                     </div>
@@ -1315,7 +1555,72 @@ function setCallroomRound(idx) {
     renderCallroomOverview();
 }
 
+function updateSeitenButtonState() {
+    const btn = document.getElementById('callroom-seiten-bestaetigt');
+    const prevBtn = document.getElementById('callroom-prev');
+    const nextBtn = document.getElementById('callroom-next');
+    
+    if(!btn) return;
+    
+    if(window.callroomSeitenBestaetigt) {
+        // Bestätigt: Button zeigt "Bestätigung löschen", Prev/Next disabled
+        btn.textContent = 'Bestätigung löschen';
+        btn.style.backgroundColor = '#ff6b6b';
+        btn.style.borderColor = '#ff6b6b';
+        if(prevBtn) {
+            prevBtn.disabled = true;
+            prevBtn.style.opacity = '0.5';
+            prevBtn.style.cursor = 'not-allowed';
+        }
+        if(nextBtn) {
+            nextBtn.disabled = true;
+            nextBtn.style.opacity = '0.5';
+            nextBtn.style.cursor = 'not-allowed';
+        }
+    } else {
+        // Nicht bestätigt: Button zeigt "Seiten bestätigt", Prev/Next aktiviert
+        btn.textContent = 'Seiten bestätigt';
+        btn.style.backgroundColor = '#4caf50';
+        btn.style.borderColor = '#4caf50';
+        if(prevBtn) {
+            prevBtn.disabled = false;
+            prevBtn.style.opacity = '1';
+            prevBtn.style.cursor = 'pointer';
+        }
+        if(nextBtn) {
+            nextBtn.disabled = false;
+            nextBtn.style.opacity = '1';
+            nextBtn.style.cursor = 'pointer';
+        }
+    }
+}
+
+function toggleSeitenBestaetigung() {
+    if(!window.callroomSeitenBestaetigt) {
+        // Wechsel zu "bestätigt"
+        if(confirm('Möchten Sie die aktuellen Seiten bestätigen? Nach dieser Bestätigung können Sie die Seiten nicht mehr wechseln.')) {
+            window.callroomSeitenBestaetigt = true;
+            localStorage.setItem(`callroomSeitenBestaetigt_${currentEventId || 'local'}`, 'true');
+            updateSeitenButtonState();
+            renderCallroomOverview();
+        }
+    } else {
+        // Wechsel zu "nicht bestätigt"
+        if(confirm('Möchten Sie die Bestätigung löschen? Danach können Sie die Seiten wieder wechseln.')) {
+            window.callroomSeitenBestaetigt = false;
+            localStorage.setItem(`callroomSeitenBestaetigt_${currentEventId || 'local'}`, 'false');
+            updateSeitenButtonState();
+            renderCallroomOverview();
+        }
+    }
+}
+
 function swapSides(matchIndex) {
+    if(window.callroomSeitenBestaetigt) {
+        alert('Die Seiten sind bestätigt. Sie können keine Änderungen mehr vornehmen.');
+        return;
+    }
+    
     if(!koTreeState || !koTreeState.rounds || !koTreeState.rounds[callroomRoundIndex]) return;
     const match = koTreeState.rounds[callroomRoundIndex][matchIndex];
     if(!match) return;
@@ -1456,7 +1761,8 @@ const pages = {
     `,
     overview: `
         <h1>Übersicht</h1>
-        <p>Hier findest du eine Übersicht über alle Funktionen.</p>
+        <p>Alle Gefechte - Read-Only Ansicht</p>
+        <div id="overview-content" class="overview-content"></div>
     `,
     missing_fencers: `
         <h1>Fehlende Fechter</h1>
@@ -1480,6 +1786,7 @@ const pages = {
             <span id="callroom-label" style="margin: 0 12px; font-weight:bold;">Durchgang 1 / 1</span>
             <button id="callroom-next">→</button>
             <button id="show-logs-btn" style="margin-left:12px;">Logs</button>
+            <button id="callroom-seiten-bestaetigt" style="margin-left:20px; padding: 8px 16px; background-color: #4caf50; color: white; border: 2px solid #4caf50; border-radius: 4px; font-weight: bold; cursor: pointer;">Seiten bestätigt</button>
         </div>
         <div id="callroom-overview" class="callroom-overview"></div>
     `,
@@ -1789,6 +2096,14 @@ function navigate(pageId) {
         }
     }
 
+    // Overview-Seite: Read-Only Ansicht aller Gefechte
+    if(pageId === 'overview') {
+        const overviewContent = document.getElementById('overview-content');
+        if(overviewContent) {
+            renderOverviewDisplay(overviewContent);
+        }
+    }
+
     // Tableau-Anzeige: KO-Baum (64 oder 16)
     if(pageId === 'tableau') {
         const contentDiv = document.getElementById('tableau-content');
@@ -1860,10 +2175,22 @@ function navigate(pageId) {
         const prevBtn = document.getElementById('callroom-prev');
         const nextBtn = document.getElementById('callroom-next');
         const showLogsBtn = document.getElementById('show-logs-btn');
+        const seitenBtn = document.getElementById('callroom-seiten-bestaetigt');
+
+        // Hole Bestätigungsstatus aus localStorage
+        window.callroomSeitenBestaetigt = localStorage.getItem(`callroomSeitenBestaetigt_${currentEventId || 'local'}`) === 'true';
+        updateSeitenButtonState();
 
         if(prevBtn) prevBtn.addEventListener('click', (e) => { e.preventDefault(); prevDurchgang(); });
         if(nextBtn) nextBtn.addEventListener('click', (e) => { e.preventDefault(); nextDurchgang(); });
         if(showLogsBtn) showLogsBtn.addEventListener('click', (e) => { e.preventDefault(); showLogPanel(); });
+        
+        if(seitenBtn) {
+            seitenBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleSeitenBestaetigung();
+            });
+        }
 
         renderCallroomOverview();
     }

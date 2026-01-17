@@ -734,3 +734,318 @@ button:hover {
   font-size: 18px;
 }
 
+/* Tableau Display (Interactive Grid) */
+.tableau-container {
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.tableau-container h2 {
+  color: #023b82;
+  border-bottom: 2px solid #5bd2fe;
+  padding-bottom: 10px;
+  margin-top: 30px;
+  margin-bottom: 15px;
+  font-size: 20px;
+}
+
+.tableau-container h2:first-child {
+  margin-top: 0;
+}
+
+.tableau-rounds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin: 15px 0;
+}
+
+.tableau-round {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.tableau-round h3 {
+  margin: 0 0 15px 0;
+  color: #023b82;
+  font-size: 16px;
+  text-align: center;
+}
+
+.tableau-match {
+  background: white;
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  border-left: 5px solid #5bd2fe;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  transition: box-shadow 0.2s ease;
+}
+
+.tableau-match:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tableau-lane {
+  background: #5bd2fe;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  text-align: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.tableau-lane:hover {
+  opacity: 0.8;
+}
+
+.tableau-matchup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.tableau-player {
+  padding: 8px 12px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  font-size: 14px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.tableau-player:hover {
+  background-color: #5bd2fe;
+  color: white;
+  font-weight: bold;
+}
+
+.tableau-vs {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  margin: 2px 0;
+}
+
+.tableau-winner {
+  background: #c8e6c9;
+  color: #2e7d32;
+  padding: 8px 12px;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.tableau-clear-btn {
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-left: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.tableau-clear-btn:hover {
+  background: #ff5252;
+}
+
+
+.overview-container {
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.overview-rounds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin: 15px 0;
+}
+
+.overview-round {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.overview-round h3 {
+  margin: 0 0 15px 0;
+  color: #023b82;
+  font-size: 16px;
+  text-align: center;
+}
+
+.overview-match {
+  background: white;
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  border-left: 5px solid #5bd2fe;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.overview-lane {
+  background: #5bd2fe;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.overview-matchup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+}
+
+.overview-player {
+  padding: 6px 8px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  font-size: 14px;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.overview-vs {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  margin: 2px 0;
+}
+
+.overview-winner {
+  background: #c8e6c9;
+  color: #2e7d32;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* Overview Callroom-Style (mit Durchgang-Navigation) */
+.overview-callroom-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.overview-callroom-lane {
+  width: 260px;
+  min-height: 120px;
+  background: #fff;
+  border: 2px solid #023b82;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overview-callroom-lane.empty-lane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-weight: bold;
+}
+
+.overview-callroom-header {
+  font-weight: bold;
+  color: white;
+  background: #5bd2fe;
+  padding: 6px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.overview-callroom-matchup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+}
+
+.overview-callroom-player {
+  padding: 8px 10px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  font-size: 13px;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.overview-callroom-vs {
+  text-align: center;
+  font-size: 11px;
+  color: #666;
+  margin: 2px 0;
+}
+
+.overview-callroom-winner {
+  background: #c8e6c9;
+  color: #2e7d32;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 12px;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* Overview Controls (Rund-Selektor) */
+.overview-controls {
+  padding: 15px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  margin-bottom: 15px;
+}
+
