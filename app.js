@@ -1,6 +1,348 @@
 // 1. Service Worker wird von UpUp verwaltet (siehe index.html)
 // UpUp bietet automatische Offline-Unterstützung ohne zusätzliche sw.js nötig
 
+// ============================================
+// AUTHENTIFIZIERUNG & BENUTZERVERWALTUNG
+// ============================================
+let currentUser = null;
+let isAuthenticated = false;
+
+// Standard Admin-Benutzer
+const DEFAULT_ADMIN = {
+    username: 'admin',
+    password: 'admin'  // In Produktion sollte dies gehashed sein
+};
+
+// Alle verfügbaren Navigationstabs
+const ALL_TABS = ['home', 'settings', 'overview', 'missing_fencers', 'tableau', 'tableau_input', 'workspace', 'podium', 'sync'];
+
+// Variablen für Firebase-Listener
+let usersListenerActive = false;
+let firebaseUsersLoaded = false;
+
+// Initialisiere Benutzerdatenbank mit Admin-Benutzer
+function initializeUsers() {
+    const users = localStorage.getItem('users');
+    
+    // Stelle sicher, dass Admin-Benutzer immer existiert
+    if(!users) {
+        const defaultUsers = {
+            admin: {
+                username: 'admin',
+                password: 'admin',
+                isAdmin: true,
+                permissions: ALL_TABS
+            }
+        };
+        localStorage.setItem('users', JSON.stringify(defaultUsers));
+        logger.info('Benutzerdatenbank initialisiert mit Admin-Benutzer (lokal)');
+    }
+    
+    // Versuche Benutzer von Firebase zu laden
+    if(firebaseDB && typeof firebaseDB.ref === 'function') {
+        logger.info('Lade Benutzer von Firebase beim Start...');
+        loadUsersFromFirebaseOnce();
+    } else {
+        logger.warn('Firebase nicht verfügbar beim Start, verwende lokale Benutzer');
+        // Starte einen Timer um später zu versuchen
+        setTimeout(() => {
+            if(firebaseDB && typeof firebaseDB.ref === 'function' && !firebaseUsersLoaded) {
+                logger.info('Firebase ist jetzt verfügbar, lade Benutzer...');
+                loadUsersFromFirebaseOnce();
+            }
+        }, 2000);
+    }
+}
+
+function getUsers() {
+    const users = localStorage.getItem('users');
+    return users ? JSON.parse(users) : {};
+}
+
+
+function saveUsers(users) {
+    localStorage.setItem('users', JSON.stringify(users));
+    
+    // Synchronisiere mit Firebase
+    if(firebaseDB) {
+        syncUsersToFirebase(users);
+    }
+}
+
+function syncUsersToFirebase(users) {
+    if(!firebaseDB || typeof firebaseDB.ref !== 'function') {
+        logger.warn('⚠️ Firebase nicht initialisiert - Benutzer nicht synchronisiert');
+        return Promise.reject('Firebase not ready');
+    }
+    
+    logger.info('📤 Synchronisiere Benutzer zu Firebase:', Object.keys(users).length, 'Benutzer');
+    
+    return firebaseDB.ref('appData/users').set(users)
+        .then(() => {
+            logger.info('✅ Benutzer zu Firebase synchronisiert');
+            return true;
+        })
+        .catch(error => {
+            logger.error('❌ Fehler beim Synchronisieren der Benutzer:', error.message || error);
+            return false;
+        });
+}
+
+function loadUsersFromFirebaseOnce() {
+    if(!firebaseDB || typeof firebaseDB.ref !== 'function') {
+        logger.warn('Firebase nicht bereit für Benutzerladen');
+        return;
+    }
+    
+    if(firebaseUsersLoaded) {
+        logger.info('Benutzer bereits von Firebase geladen');
+        return;
+    }
+    
+    logger.info('Starte einmaliges Laden von Benutzern von Firebase...');
+    
+    try {
+        const usersRef = firebaseDB.ref('appData/users');
+        const timeout = setTimeout(() => {
+            logger.warn('Timeout beim Laden von Firebase Benutzern');
+        }, 10000);
+        
+        usersRef.once('value')
+            .then((snapshot) => {
+                clearTimeout(timeout);
+                if(snapshot.exists()) {
+                    const firebaseUsers = snapshot.val();
+                    if(firebaseUsers && typeof firebaseUsers === 'object') {
+                        localStorage.setItem('users', JSON.stringify(firebaseUsers));
+                        firebaseUsersLoaded = true;
+                        logger.info('✓ Benutzer von Firebase geladen:', Object.keys(firebaseUsers).length, 'Benutzer');
+                        
+                        // Starte jetzt den permanenten Listener
+                        setupUserListener();
+                    } else {
+                        logger.warn('Firebase Benutzer-Daten ungültig');
+                        firebaseUsersLoaded = true;
+                    }
+                } else {
+                    logger.info('Keine Benutzer in Firebase vorhanden, verwende lokale');
+                    const localUsers = getUsers();
+                    if(Object.keys(localUsers).length > 0) {
+                        logger.info('Synchronisiere lokale Benutzer zu Firebase...');
+                        syncUsersToFirebase(localUsers);
+                    }
+                    firebaseUsersLoaded = true;
+                }
+            })
+            .catch((error) => {
+                clearTimeout(timeout);
+                logger.error('Fehler beim Laden von Firebase Benutzern:', error.message);
+                firebaseUsersLoaded = true;
+                // Fallback zu lokalen Benutzern
+                logger.info('Verwende lokale Benutzer als Fallback');
+            });
+    } catch(e) {
+        logger.error('Exception beim Firebase Laden:', e.message);
+        firebaseUsersLoaded = true;
+    }
+}
+
+function setupUserListener() {
+    if(usersListenerActive || !firebaseDB || typeof firebaseDB.ref !== 'function') {
+        if(usersListenerActive) {
+            logger.info('Benutzer-Listener ist bereits aktiv');
+        } else {
+            logger.warn('Firebase nicht verfügbar für Listener');
+        }
+        return;
+    }
+    
+    usersListenerActive = true;
+    logger.info('Starte permanenten Benutzer-Listener in Firebase');
+    
+    try {
+        const usersRef = firebaseDB.ref('appData/users');
+        usersRef.on('value', 
+            (snapshot) => {
+                if(snapshot.exists()) {
+                    const firebaseUsers = snapshot.val();
+                    if(firebaseUsers && typeof firebaseUsers === 'object') {
+                        localStorage.setItem('users', JSON.stringify(firebaseUsers));
+                        logger.info('✓ Benutzer von Firebase Listener aktualisiert');
+                    }
+                } else {
+                    logger.info('Keine Benutzer in Firebase vom Listener');
+                }
+            }, 
+            (error) => {
+                logger.error('Fehler bei Benutzer-Listener:', error.message);
+                usersListenerActive = false;
+            }
+        );
+    } catch(e) {
+        logger.error('Exception beim Starten des Listeners:', e.message);
+        usersListenerActive = false;
+    }
+}
+
+// Manuelles Laden von Firebase Benutzern (z.B. bei Anmeldung)
+function refreshUsersFromFirebase() {
+    if(!firebaseDB) {
+        logger.warn('Firebase nicht initialisiert');
+        return Promise.reject('Firebase not ready');
+    }
+    
+    return firebaseDB.ref('appData/users').once('value').then((snapshot) => {
+        if(snapshot.exists()) {
+            const firebaseUsers = snapshot.val();
+            localStorage.setItem('users', JSON.stringify(firebaseUsers));
+            logger.info('✓ Benutzer von Firebase aktualisiert (manuell)');
+            return true;
+        } else {
+            logger.info('Keine Benutzer in Firebase gefunden');
+            return false;
+        }
+    }).catch(error => {
+        logger.error('Fehler beim Laden von Benutzern:', error);
+        return false;
+    });
+}
+
+function authenticateUser(username, password) {
+    // Zuerst versuchen, aktuellste Benutzer von Firebase zu laden
+    return refreshUsersFromFirebase().then(() => {
+        const users = getUsers();
+        const user = users[username];
+        
+        if(user && user.password === password) {
+            currentUser = {
+                username: user.username,
+                isAdmin: user.isAdmin || false,
+                permissions: user.permissions || []
+            };
+            isAuthenticated = true;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            logger.info('✓ Benutzer authentifiziert:', username);
+            return true;
+        }
+        
+        logger.warn('❌ Authentifizierungsfehler für Benutzer:', username);
+        return false;
+    }).catch(error => {
+        logger.error('Fehler beim Authentifizierungsprozess:', error);
+        // Fallback: Versuche mit lokalen Benutzern
+        const users = getUsers();
+        const user = users[username];
+        
+        if(user && user.password === password) {
+            currentUser = {
+                username: user.username,
+                isAdmin: user.isAdmin || false,
+                permissions: user.permissions || []
+            };
+            isAuthenticated = true;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            logger.info('✓ Benutzer authentifiziert (Fallback):', username);
+            return true;
+        }
+        
+        return false;
+    });
+}
+
+function logoutUser() {
+    currentUser = null;
+    isAuthenticated = false;
+    localStorage.removeItem('currentUser');
+    logger.info('Benutzer abgemeldet');
+}
+
+function restoreSession() {
+    const savedUser = localStorage.getItem('currentUser');
+    if(savedUser) {
+        try {
+            currentUser = JSON.parse(savedUser);
+            isAuthenticated = true;
+            logger.info('Session wiederhergestellt für:', currentUser.username);
+            return true;
+        } catch(e) {
+            logger.error('Fehler beim Wiederherstellen der Session:', e);
+            return false;
+        }
+    }
+    return false;
+}
+
+function createUser(username, password, permissions = []) {
+    const users = getUsers();
+    
+    if(users[username]) {
+        logger.warn('❌ Benutzer existiert bereits:', username);
+        return false;
+    }
+    
+    users[username] = {
+        username: username,
+        password: password,
+        isAdmin: false,
+        permissions: permissions
+    };
+    
+    saveUsers(users);
+    logger.info('✅ Neuer Benutzer erstellt:', username);
+    
+    // Synchronisiere gesamte Benutzerliste zu Firebase
+    syncUsersToFirebase(users)
+        .then(() => logger.info('📤 Benutzer', username, 'zu Firebase synchronisiert'))
+        .catch(error => logger.error('❌ Fehler beim Synchronisieren des Benutzers:', username, error));
+    
+    return true;
+}
+
+function deleteUser(username) {
+    const users = getUsers();
+    
+    if(username === 'admin') {
+        logger.warn('Admin-Benutzer kann nicht gelöscht werden');
+        return false;
+    }
+    
+    if(users[username]) {
+        delete users[username];
+        saveUsers(users);
+        logger.info('Benutzer gelöscht:', username);
+        
+        // Entferne Benutzer auch aus Firebase
+        if(firebaseDB) {
+            firebaseDB.ref(`appData/users/${username}`).remove()
+                .catch(error => logger.error('Fehler beim Löschen des Benutzers in Firebase:', error));
+        }
+        
+        return true;
+    }
+    
+    return false;
+}
+
+function updateUserPermissions(username, permissions) {
+    const users = getUsers();
+    
+    if(users[username]) {
+        users[username].permissions = permissions;
+        saveUsers(users);
+        logger.info('Berechtigungen aktualisiert für:', username);
+        
+        // Synchronisiere aktualisierte Berechtigungen zu Firebase
+        if(firebaseDB) {
+            firebaseDB.ref(`appData/users/${username}/permissions`).set(permissions)
+                .catch(error => logger.error('Fehler beim Synchronisieren der Berechtigungen:', error));
+        }
+        
+        return true;
+    }
+    
+    return false;
+}
+
 // Firebase Sync Flag
 let firebaseSyncEnabled = false;
 let currentEventId = null;
@@ -1070,9 +1412,7 @@ function downloadLogs() {
 // 5. Seiten-Inhalte definieren
 const pages = {
     home: `
-        <h1>Willkommen auf der Startseite</h1>
-        <p>Das ist der Inhalt deiner ersten PWA-Seite.<br><br>
-        <button id="alertBtn">Klick mich!</button></p>
+        <div id="home-content"></div>
     `,
     settings: `
         <h1>Einstellungen</h1>
@@ -1138,6 +1478,10 @@ const pages = {
     sync: `
         <h1>Verbindung</h1>
         <div id="sync-content"></div>
+    `,
+    permissions: `
+        <h1>Berechtigungen</h1>
+        <div id="permissions-content"></div>
     `
 };
 
@@ -1158,7 +1502,85 @@ function navigate(pageId) {
 
     // Spezielle Event-Listener für Inhalte hinzufügen
     if(pageId === 'home') {
-        document.getElementById('alertBtn').addEventListener('click', () => alert('Hallo!'));
+        const homeContent = document.getElementById('home-content');
+        
+        if(!isAuthenticated) {
+            // Login-Seite
+            homeContent.innerHTML = `
+                <div style="max-width: 400px; margin: 60px auto; padding: 40px; background: white; border: 2px solid #023b82; border-radius: 8px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <h1 style="color: #023b82; margin-top: 0;">Callroom App</h1>
+                    <p style="color: #666; margin-bottom: 30px;">Bitte melden Sie sich an</p>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <input type="text" id="loginUsername" placeholder="Benutzername" style="width: 100%; padding: 12px; border: 2px solid #023b82; border-radius: 4px; font-size: 16px; box-sizing: border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom: 30px;">
+                        <input type="password" id="loginPassword" placeholder="Passwort" style="width: 100%; padding: 12px; border: 2px solid #023b82; border-radius: 4px; font-size: 16px; box-sizing: border-box;">
+                    </div>
+                    
+                    <button id="loginBtn" style="width: 100%; padding: 12px; background-color: #5bd2fe; color: #023b82; border: 2px solid #023b82; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;">Anmelden</button>
+                    
+                    <p id="loginError" style="color: #f44336; margin-top: 15px; display: none;"></p>
+                </div>
+            `;
+            
+            const loginBtn = document.getElementById('loginBtn');
+            const loginUsername = document.getElementById('loginUsername');
+            const loginPassword = document.getElementById('loginPassword');
+            const loginError = document.getElementById('loginError');
+            
+            loginBtn.addEventListener('click', () => {
+                const username = loginUsername.value.trim();
+                const password = loginPassword.value;
+                
+                if(!username || !password) {
+                    loginError.textContent = 'Bitte geben Sie Benutzername und Passwort ein';
+                    loginError.style.display = 'block';
+                    return;
+                }
+                
+                // Authentifiziere Benutzer (lädt Firebase-Daten automatisch)
+                authenticateUser(username, password).then((success) => {
+                    if(success) {
+                        loginError.style.display = 'none';
+                        updateNavigationButtons();
+                        navigate('home');
+                    } else {
+                        loginError.textContent = 'Ungültige Anmeldedaten';
+                        loginError.style.display = 'block';
+                        loginPassword.value = '';
+                    }
+                }).catch((error) => {
+                    logger.error('Login Fehler:', error);
+                    loginError.textContent = 'Fehler beim Anmelden. Bitte versuchen Sie es später';
+                    loginError.style.display = 'block';
+                    loginPassword.value = '';
+                });
+            });
+            
+            // Enter-Taste zum Anmelden
+            loginPassword.addEventListener('keypress', (e) => {
+                if(e.key === 'Enter') loginBtn.click();
+            });
+            
+        } else {
+            // Willkommensseite für angemeldete Benutzer
+            homeContent.innerHTML = `
+                <div style="max-width: 600px; margin: 40px auto; padding: 30px; background: white; border-radius: 8px; text-align: center;">
+                    <h1 style="color: #023b82;">Willkommen, ${currentUser.username}!</h1>
+                    <p style="color: #666; font-size: 18px;">Du bist erfolgreich angemeldet.</p>
+                    
+                    ${currentUser.isAdmin ? `
+                        <div style="background: #e3f2fd; padding: 15px; border-radius: 4px; margin: 20px 0; border-left: 4px solid #2196F3;">
+                            <p style="color: #1976d2; margin: 0;"><strong>👑 Administrator-Konto</strong></p>
+                        </div>
+                    ` : ''}
+                    
+                    <button onclick="logoutAndRefresh()" style="padding: 12px 30px; background-color: #ff6b6b; color: white; border: 2px solid #ff6b6b; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px;">Abmelden</button>
+                </div>
+            `;
+        }
     }
 
     // Settings-Seite: Toggle zwischen Einzel und Team + Bahnfarben
@@ -1579,6 +2001,183 @@ function navigate(pageId) {
             if(input) input.focus();
         }, 100);
     }
+    
+    // Berechtigungen-Seite (nur für Admin sichtbar)
+    if(pageId === 'permissions') {
+        if(!currentUser || !currentUser.isAdmin) {
+            document.getElementById('permissions-content').innerHTML = '<p style="color: #f44336;">Sie haben keine Berechtigung für diese Seite.</p>';
+            return;
+        }
+        
+        const permissionsContent = document.getElementById('permissions-content');
+        const users = getUsers();
+        const usernames = Object.keys(users);
+        
+        let html = `
+            <div style="max-width: 1000px; margin: 20px auto;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                    <!-- Neuen Benutzer erstellen -->
+                    <div style="border: 2px solid #023b82; border-radius: 8px; padding: 20px; background: #f9f9f9;">
+                        <h3 style="color: #023b82; margin-top: 0;">Neuen Benutzer erstellen</h3>
+                        
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; color: #023b82; font-weight: bold; margin-bottom: 5px;">Benutzername:</label>
+                            <input type="text" id="newUsername" placeholder="Benutzername" style="width: 100%; padding: 10px; border: 2px solid #023b82; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; color: #023b82; font-weight: bold; margin-bottom: 5px;">Passwort:</label>
+                            <input type="password" id="newPassword" placeholder="Passwort" style="width: 100%; padding: 10px; border: 2px solid #023b82; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; color: #023b82; font-weight: bold; margin-bottom: 10px;">Sichtbare Reiter:</label>
+                            <div style="background: white; padding: 10px; border: 2px solid #023b82; border-radius: 4px; max-height: 250px; overflow-y: auto;">
+                                ${ALL_TABS.map(tab => `
+                                    <div style="margin: 8px 0;">
+                                        <input type="checkbox" id="newPerm_${tab}" value="${tab}" checked style="margin-right: 8px;">
+                                        <label for="newPerm_${tab}" style="cursor: pointer;">${tab.charAt(0).toUpperCase() + tab.slice(1)}</label>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <button id="createUserBtn" style="width: 100%; padding: 12px; background-color: #4caf50; color: white; border: 2px solid #4caf50; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px;">Benutzer erstellen</button>
+                        <div id="createUserError" style="color: #f44336; margin-top: 10px; display: none;"></div>
+                    </div>
+                    
+                    <!-- Benutzer verwalten -->
+                    <div style="border: 2px solid #023b82; border-radius: 8px; padding: 20px; background: #f9f9f9;">
+                        <h3 style="color: #023b82; margin-top: 0;">Benutzer verwalten</h3>
+                        
+                        <div style="background: white; border-radius: 4px; max-height: 500px; overflow-y: auto;">
+                            ${usernames.map(username => {
+                                const user = users[username];
+                                return `
+                                    <div id="userRow_${username}" style="padding: 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <p style="margin: 0; font-weight: bold; color: #023b82;">${username}</p>
+                                            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                                                ${user.isAdmin ? '👑 Admin' : user.permissions.length + ' Tab(s) sichtbar'}
+                                            </p>
+                                        </div>
+                                        ${username !== 'admin' ? `
+                                            <button onclick="editUserPermissions('${username}')" style="padding: 8px 15px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">Bearbeiten</button>
+                                            <button onclick="deleteUserConfirm('${username}')" style="padding: 8px 15px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">Löschen</button>
+                                        ` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Modal für Berechtigungen bearbeiten -->
+            <div id="editPermissionsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 400px; width: 90%;">
+                    <h3 id="editUsername" style="color: #023b82; margin-top: 0;"></h3>
+                    
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 4px; margin: 15px 0; max-height: 300px; overflow-y: auto;">
+                        ${ALL_TABS.map(tab => `
+                            <div style="margin: 10px 0;">
+                                <input type="checkbox" id="editPerm_${tab}" value="${tab}" style="margin-right: 8px;">
+                                <label for="editPerm_${tab}" style="cursor: pointer;">${tab.charAt(0).toUpperCase() + tab.slice(1)}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="saveUserPermissions()" style="flex: 1; padding: 10px; background-color: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Speichern</button>
+                        <button onclick="closeEditModal()" style="flex: 1; padding: 10px; background-color: #888; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Abbrechen</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        permissionsContent.innerHTML = html;
+        
+        // Event-Listener
+        document.getElementById('createUserBtn').addEventListener('click', () => {
+            const username = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('newPassword').value;
+            const errorDiv = document.getElementById('createUserError');
+            
+            if(!username || !password) {
+                errorDiv.textContent = 'Benutzername und Passwort erforderlich';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            const permissions = ALL_TABS.filter(tab => 
+                document.getElementById(`newPerm_${tab}`).checked
+            );
+            
+            if(createUser(username, password, permissions)) {
+                errorDiv.style.display = 'none';
+                alert('Benutzer erfolgreich erstellt!');
+                navigate('permissions');
+            } else {
+                errorDiv.textContent = 'Benutzer existiert bereits';
+                errorDiv.style.display = 'block';
+            }
+        });
+    }
+}
+
+// Hilfsfunktionen für Permissions
+let currentEditingUser = null;
+
+function editUserPermissions(username) {
+    currentEditingUser = username;
+    const users = getUsers();
+    const user = users[username];
+    
+    document.getElementById('editUsername').textContent = `Berechtigungen für: ${username}`;
+    
+    // Setze Checkboxen
+    ALL_TABS.forEach(tab => {
+        const checkbox = document.getElementById(`editPerm_${tab}`);
+        if(checkbox) {
+            checkbox.checked = user.permissions.includes(tab);
+        }
+    });
+    
+    document.getElementById('editPermissionsModal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('editPermissionsModal').style.display = 'none';
+    currentEditingUser = null;
+}
+
+function saveUserPermissions() {
+    if(!currentEditingUser) return;
+    
+    const permissions = ALL_TABS.filter(tab => 
+        document.getElementById(`editPerm_${tab}`).checked
+    );
+    
+    if(updateUserPermissions(currentEditingUser, permissions)) {
+        alert('Berechtigungen aktualisiert!');
+        closeEditModal();
+        navigate('permissions');
+    }
+}
+
+function deleteUserConfirm(username) {
+    if(confirm(`Möchtest du den Benutzer "${username}" wirklich löschen?`)) {
+        if(deleteUser(username)) {
+            alert('Benutzer gelöscht!');
+            navigate('permissions');
+        }
+    }
+}
+
+function logoutAndRefresh() {
+    logoutUser();
+    updateNavigationButtons();
+    navigate('home');
 }
 
 // Funktion zur Aktualisierung der Navigations-Buttons
@@ -1588,12 +2187,46 @@ function updateNavigationButtons() {
     const hasData = savedValues && JSON.parse(savedValues).some(v => v && getFencerById(v));
     const canEnterTableau = localStorage.getItem('canEnterTableau') === 'true';
     
+    const tabNameMap = {
+        'Home': 'home',
+        'Einstellungen': 'settings',
+        'Übersicht': 'overview',
+        'Fehlende Fechter': 'missing_fencers',
+        'Tableau': 'tableau',
+        'Tableau eintragen': 'tableau_input',
+        'Callroom': 'workspace',
+        'Podium': 'podium',
+        'Verbindung': 'sync',
+        'Berechtigungen': 'permissions'
+    };
+    
     navButtons.forEach(btn => {
-        if(btn.textContent === 'Tableau eintragen') {
-            // Button nur anzeigen wenn:
-            // - KEIN Tableau existiert UND
-            // - das Flag "canEnterTableau" gesetzt ist
+        const btnText = btn.textContent.trim();
+        const pageId = tabNameMap[btnText];
+        
+        // Spezialbehandlung für Tableau eintragen
+        if(btnText === 'Tableau eintragen') {
             btn.style.display = (!hasData && canEnterTableau) ? 'inline-block' : 'none';
+            return;
+        }
+        
+        // Nur für authentifizierte Benutzer sichtbar
+        if(!isAuthenticated) {
+            btn.style.display = 'none';
+            return;
+        }
+        
+        // Berechtigungen prüfen
+        if(pageId) {
+            if(pageId === 'permissions') {
+                // Nur Admin sieht Permissions-Tab
+                btn.style.display = (currentUser && currentUser.isAdmin) ? 'inline-block' : 'none';
+            } else if(currentUser && currentUser.permissions.includes(pageId)) {
+                // Benutzer sieht nur Tabs, für die er Berechtigung hat
+                btn.style.display = 'inline-block';
+            } else {
+                btn.style.display = 'none';
+            }
         }
     });
 }
@@ -1750,7 +2383,9 @@ function copyToClipboard(text) {
 }
 
 // Lade Datenbank beim Start
+initializeUsers();
 loadFencersDatabase();
+restoreSession();
 
 // Prüfe ob Event-ID in URL ist
 checkEventIdFromUrl();
@@ -1783,6 +2418,10 @@ function initializeLaneSettings() {
 }
 
 initializeLaneSettings();
+
+// Mache setupUserListener global verfügbar
+window.setupUserListener = setupUserListener;
+window.refreshUsersFromFirebase = refreshUsersFromFirebase;
 
 // Initial die Startseite laden
 navigate('home');
