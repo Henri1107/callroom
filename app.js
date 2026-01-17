@@ -1176,9 +1176,18 @@ function renderCallroomOverview() {
     if(callroomRoundIndex >= totalRounds) callroomRoundIndex = totalRounds - 1;
     if(callroomRoundIndex < 0) callroomRoundIndex = 0;
     const matches = koTreeState.rounds[callroomRoundIndex] || [];
+    // Gruppiere nach Vierteln: jeder Durchgang zeigt das erste Gefecht eines jeden Viertels
+    const laneCount = 4;
+    const totalMatches = matches.length;
+    const quarterSize = Math.ceil(totalMatches / laneCount) || 1; // min 1
     const groups = [];
-    for(let i = 0; i < matches.length; i += 4) {
-        groups.push(matches.slice(i, i + 4));
+    for(let pass = 0; pass < quarterSize; pass++) {
+        const group = [];
+        for(let lane = 0; lane < laneCount; lane++) {
+            const idx = (lane * quarterSize) + pass;
+            group.push(totalMatches > idx ? matches[idx] : null);
+        }
+        groups.push(group);
     }
 
     if(callroomGroupIndex >= groups.length) callroomGroupIndex = groups.length - 1;
@@ -1219,7 +1228,8 @@ function renderCallroomOverview() {
             continue;
         }
 
-        const matchIndex = (callroomGroupIndex * 4) + lane;
+        // Bestimme den tatsächlichen Match-Index innerhalb der Runde basierend auf Vierteln
+        const matchIndex = (lane * quarterSize) + callroomGroupIndex;
         const p1 = matchData.p1;
         const p2 = matchData.p2;
 
@@ -1264,9 +1274,11 @@ function prevDurchgang() {
 }
 
 function nextDurchgang() {
-    // compute max groups
-    const matches = koTreeState && koTreeState.rounds && koTreeState.rounds[0] ? koTreeState.rounds[0] : [];
-    const maxGroups = Math.ceil(matches.length / 4);
+    // compute max groups basierend auf aktueller Runde und Viertelgröße
+    const matches = (koTreeState && koTreeState.rounds && koTreeState.rounds[callroomRoundIndex]) ? koTreeState.rounds[callroomRoundIndex] : [];
+    const laneCount = 4;
+    const quarterSize = Math.ceil((matches.length || 0) / laneCount) || 1;
+    const maxGroups = quarterSize;
     callroomGroupIndex = Math.min(maxGroups - 1, callroomGroupIndex + 1);
     saveCallroomGroupIndex();
     renderCallroomOverview();
@@ -1304,8 +1316,8 @@ function setCallroomRound(idx) {
 }
 
 function swapSides(matchIndex) {
-    if(!koTreeState || !koTreeState.rounds || !koTreeState.rounds[0]) return;
-    const match = koTreeState.rounds[0][matchIndex];
+    if(!koTreeState || !koTreeState.rounds || !koTreeState.rounds[callroomRoundIndex]) return;
+    const match = koTreeState.rounds[callroomRoundIndex][matchIndex];
     if(!match) return;
     const tmp = match.p1;
     match.p1 = match.p2;
@@ -1332,8 +1344,8 @@ function swapSides(matchIndex) {
 }
 
 function toggleFencerStatus(matchIndex, playerNum) {
-    if(!koTreeState || !koTreeState.rounds || !koTreeState.rounds[0]) return;
-    const match = koTreeState.rounds[0][matchIndex];
+    if(!koTreeState || !koTreeState.rounds || !koTreeState.rounds[callroomRoundIndex]) return;
+    const match = koTreeState.rounds[callroomRoundIndex][matchIndex];
     if(!match) return;
     const key = match.id || `m_${matchIndex}`;
     const statuses = getCallroomStatuses();
