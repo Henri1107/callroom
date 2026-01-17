@@ -40,6 +40,28 @@ nav button:hover {
   color: #5bd2fe;
 }
 
+/* Offline Indicator */
+.offline-indicator {
+  display: inline-block;
+  padding: 8px 15px;
+  background-color: #ff6b6b;
+  color: white;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 4px 2px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 /* Main Container */
 main {
   padding: 20px;

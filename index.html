@@ -9,6 +9,9 @@
 </head>
 <body>
     <nav>
+        <div id="offline-indicator" class="offline-indicator" style="display: none;" title="App läuft offline">
+            <span>📡</span> Offline
+        </div>
         <button onclick="navigate('home')">Home</button>
         <button onclick="navigate('settings')">Einstellungen</button>
         <button onclick="navigate('overview')">Übersicht</button>
@@ -29,9 +32,19 @@
     <!-- QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
     <!-- Firebase Konfiguration -->
     <script src="firebase-config.js"></script>
 
     <script src="app.js"></script>
+    
+    <script>
+        // Offline-Indicator beim Laden initialisieren
+        document.addEventListener('DOMContentLoaded', () => {
+            updateOfflineIndicator();
+        });
+    </script>
 </body>
 </html>

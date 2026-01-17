@@ -13,6 +13,33 @@ let callroomRoundIndex = 0;
 let fencersDB = {};
 let koTreeState = null;
 
+// 3. Offline Status Überwachung
+let isOffline = !navigator.onLine;
+
+function updateOfflineIndicator() {
+    const offlineIndicator = document.getElementById('offline-indicator');
+    if (!offlineIndicator) return;
+    
+    if (!navigator.onLine) {
+        offlineIndicator.style.display = 'inline-block';
+        isOffline = true;
+    } else {
+        offlineIndicator.style.display = 'none';
+        isOffline = false;
+    }
+}
+
+// Event Listener für Online/Offline Status
+window.addEventListener('online', () => {
+    logger.info('App ist wieder online');
+    updateOfflineIndicator();
+});
+
+window.addEventListener('offline', () => {
+    logger.warn('App ist offline - Service Worker wird verwendet');
+    updateOfflineIndicator();
+});
+
 // Simple logging utility (timestamps + optional storage)
 const logBuffer = [];
 const MAX_LOG_BUFFER = 500;
@@ -91,21 +118,21 @@ function getTableauMode() {
 }
 
 // ============================================
-// BAHN-VERWALTUNG (4 feste Bahnen)
+// BAHN-VERWALTUNG (5 Bahnen)
 // ============================================
-const defaultLaneColors = ['#FF0000', '#0000FF', '#FFFF00', '#00FF00'];
-const defaultLaneNames = ['Bahn 1', 'Bahn 2', 'Bahn 3', 'Bahn 4'];
+const defaultLaneColors = ['#FF0000', '#0000FF', '#FFFF00', '#00FF00', '#FF00FF'];
+const defaultLaneNames = ['Bahn 1', 'Bahn 2', 'Bahn 3', 'Bahn 4', 'Bahn 5'];
 
-// Zusätzliche Bahn für manuelle Auswahl
-const manualLaneColors = [...defaultLaneColors, '#FF00FF'];
-const manualLaneNames = [...defaultLaneNames, 'Bahn 5'];
+// Manuelle Auswahl verwendet die gleichen Bahnen
+const manualLaneColors = defaultLaneColors;
+const manualLaneNames = defaultLaneNames;
 
 function getLaneColors() {
     const saved = localStorage.getItem('laneColors');
     if(saved) {
         try {
             const colors = JSON.parse(saved);
-            return (colors && colors.length === 4) ? colors : defaultLaneColors;
+            return (colors && colors.length === 5) ? colors : defaultLaneColors;
         } catch(e) {
             return defaultLaneColors;
         }
@@ -126,7 +153,7 @@ function getLaneNames() {
     if(saved) {
         try {
             const names = JSON.parse(saved);
-            return (names && names.length === 4) ? names : defaultLaneNames;
+            return (names && names.length === 5) ? names : defaultLaneNames;
         } catch(e) {
             return defaultLaneNames;
         }
@@ -1174,7 +1201,7 @@ function navigate(pageId) {
         const laneNames = getLaneNames();
         laneSettingsContainer.innerHTML = '';
         
-        for(let i = 0; i < 4; i++) {
+        for(let i = 0; i < 5; i++) {
             const settingDiv = document.createElement('div');
             settingDiv.className = 'lane-setting-group';
             settingDiv.innerHTML = `
@@ -1210,7 +1237,7 @@ function navigate(pageId) {
         saveLaneSettingsBtn.addEventListener('click', () => {
             const newColors = [];
             const newNames = [];
-            for(let i = 0; i < 4; i++) {
+            for(let i = 0; i < 5; i++) {
                 const colorText = document.getElementById(`laneColorText${i}`).value;
                 const nameText = document.getElementById(`laneName${i}`).value || `Bahn ${i + 1}`;
                 newColors.push(colorText);
@@ -1222,13 +1249,28 @@ function navigate(pageId) {
         });
         
         newEventBtn.addEventListener('click', () => {
-            if(confirm('Möchtest du wirklich alle Daten der aktuellen Veranstaltung löschen?')) {
-                localStorage.removeItem('tableauValues');
-                localStorage.removeItem('tableauMode_saved');
-                koTreeState = null;
-                alert('Alle Daten gelöscht. Du kannst ein neues Turnier starten.');
-                updateNavigationButtons();
+            // Erste Bestätigung
+            if(!confirm('⚠️ WARNUNG: Möchtest du wirklich eine neue Veranstaltung erstellen?\n\nDies löscht alle aktuellen Turnierdaten unwiderruflich!')) {
+                return;
             }
+            
+            // Zweite Bestätigung für zusätzliche Sicherheit
+            if(!confirm('Bist du dir wirklich sicher?\n\nAlle Gefechte, Ergebnisse und Einstellungen werden gelöscht!')) {
+                return;
+            }
+            
+            // Lösche alle Daten
+            localStorage.removeItem('tableauValues');
+            localStorage.removeItem('tableauMode_saved');
+            localStorage.removeItem('currentEventId');
+            koTreeState = null;
+            currentEventId = null;
+            
+            // Setze Flag, dass Tableau eingegeben werden kann
+            localStorage.setItem('canEnterTableau', 'true');
+            
+            alert('✓ Alle Daten gelöscht.\n\nDu kannst jetzt unter "Tableau eintragen" ein neues Turnier erstellen.');
+            updateNavigationButtons();
         });
         
         updateButtons();
@@ -1269,6 +1311,9 @@ function navigate(pageId) {
                 const eventId = 'event_' + Date.now();
                 currentEventId = eventId;
                 localStorage.setItem('currentEventId', eventId);
+                
+                // Lösche das "canEnterTableau" Flag nach erfolgreichem Eintragen
+                localStorage.removeItem('canEnterTableau');
                 
                 // Firebase Sync ZUERST aktivieren, DANN Daten speichern
                 if(firebaseDB) {
@@ -1449,37 +1494,90 @@ function navigate(pageId) {
     // ===== MULTI-DEVICE SYNCHRONISIERUNG =====
     if(pageId === 'sync') {
         const syncContent = document.getElementById('sync-content');
-        const eventIdStored = localStorage.getItem('currentEventId') || 'Keine aktive Event';
-        const baseUrl = window.location.origin + window.location.pathname + '?eventId=';
-        const fullUrl = eventIdStored !== 'Keine aktive Event' ? baseUrl + eventIdStored : '';
+        const currentId = localStorage.getItem('currentEventId');
 
         syncContent.innerHTML = `
-            <div style="padding: 24px; text-align: center;">
-                <h3>Event-ID</h3>
-                <p style="font-size: 20px; font-weight: bold; font-family: monospace; word-break: break-all; background: #fff; padding: 10px; border-radius: 6px; display: inline-block;">
-                    ${eventIdStored}
-                </p>
-                ${fullUrl ? `
-                    <div id="qrcode" style="padding: 16px; background: white; display: inline-block; border-radius: 8px; margin-top: 16px;"></div>
-                    <p style="font-size: 12px; color: #666; margin-top: 8px;">Scanne den QR-Code mit Tablet/Handy, um beizutreten</p>
-                ` : `<p style="color: #666; margin-top: 12px;">Kein aktives Event. Erstelle zuerst ein Tableau.</p>`}
+            <div style="max-width: 1200px; margin: 20px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                
+                <!-- Left: QR Code Scanner -->
+                <div style="border: 2px solid #023b82; border-radius: 8px; padding: 20px; background: #f9f9f9;">
+                    <h3 style="color: #023b82; margin-top: 0;">QR-Code Scannen</h3>
+                    <p style="font-size: 14px; color: #666;">Scanne einen QR-Code um dich zu verbinden:</p>
+                    
+                    <div id="qr-scanner" style="width: 100%; max-width: 400px; margin: 20px auto;"></div>
+                    <div style="text-align: center;">
+                        <button id="startScannerBtn" style="padding: 10px 20px; background-color: #5bd2fe; color: #023b82; border: 2px solid #023b82; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 10px 5px;">Scanner starten</button>
+                        <button id="stopScannerBtn" style="padding: 10px 20px; background-color: #ff6b6b; color: white; border: 2px solid #ff6b6b; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 10px 5px; display: none;">Scanner stoppen</button>
+                    </div>
+                    <div id="scanResult" style="margin-top: 20px; text-align: center; color: #666;"></div>
+                </div>
+                
+                <!-- Right: Manual Input & QR Generator -->
+                <div style="border: 2px solid #023b82; border-radius: 8px; padding: 20px; background: #f9f9f9;">
+                    <h3 style="color: #023b82; margin-top: 0;">Manuelle Eingabe</h3>
+                    <p style="font-size: 14px; color: #666;">Gib die Event-ID ein oder geneiere einen QR-Code:</p>
+                    
+                    <div style="margin: 20px 0;">
+                        <input type="text" id="eventIdInput" placeholder="Event-ID eingeben" style="padding: 12px; font-size: 16px; border: 2px solid #023b82; border-radius: 4px; width: 100%; margin-bottom: 10px; font-family: monospace;">
+                        <button onclick="joinEventById()" style="width: 100%; padding: 12px; font-size: 16px; background-color: #5bd2fe; color: #023b82; border: 2px solid #023b82; border-radius: 4px; cursor: pointer; font-weight: bold;">Verbinden</button>
+                    </div>
+
+                    ${currentId ? `
+                        <div style="margin-top: 30px; text-align: center;">
+                            <h4 style="color: #023b82;">QR-Code für aktives Event</h4>
+                            <p style="font-size: 12px; color: #666; font-family: monospace; background: white; padding: 8px; border-radius: 4px;">Event-ID: <strong>${currentId}</strong></p>
+                            <div id="qrcode-generator" style="padding: 16px; background: white; display: inline-block; border-radius: 8px; margin-top: 12px;"></div>
+                            <p style="font-size: 12px; color: #666; margin-top: 12px;">Teile diesen QR-Code mit anderen Geräten</p>
+                        </div>
+                    ` : `
+                        <div style="margin-top: 30px; padding: 20px; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107; color: #856404;">
+                            <strong>Hinweis:</strong> Kein aktives Event vorhanden. Erstelle zuerst ein Tableau, um einen QR-Code zu generieren.
+                        </div>
+                    `}
+                </div>
             </div>
         `;
 
-        // Generiere QR-Code nur wenn Event aktiv
-        if(fullUrl && typeof QRCode !== 'undefined') {
+        // QR-Code Generator für aktive Event
+        if(currentId && typeof QRCode !== 'undefined') {
             setTimeout(() => {
-                const qrDiv = document.getElementById('qrcode');
-                if(qrDiv) {
-                    qrDiv.innerHTML = '';
+                const qrDiv = document.getElementById('qrcode-generator');
+                if(qrDiv && qrDiv.innerHTML === '') {
+                    const baseUrl = window.location.origin + window.location.pathname + '?eventId=';
                     new QRCode(qrDiv, {
-                        text: fullUrl,
+                        text: baseUrl + currentId,
                         width: 250,
                         height: 250
                     });
                 }
             }, 100);
         }
+
+        // Scanner Button Handler
+        const startBtn = document.getElementById('startScannerBtn');
+        const stopBtn = document.getElementById('stopScannerBtn');
+
+        if(startBtn) {
+            startBtn.addEventListener('click', () => {
+                startQRScanner();
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+            });
+        }
+
+        if(stopBtn) {
+            stopBtn.addEventListener('click', () => {
+                stopQRScanner();
+                stopBtn.style.display = 'none';
+                startBtn.style.display = 'inline-block';
+            });
+        }
+
+        // Focus auf Input bei Laden
+        setTimeout(() => {
+            const input = document.getElementById('eventIdInput');
+            if(input) input.focus();
+        }, 100);
     }
 }
 
@@ -1488,10 +1586,14 @@ function updateNavigationButtons() {
     const navButtons = document.querySelectorAll('nav button');
     const savedValues = localStorage.getItem('tableauValues');
     const hasData = savedValues && JSON.parse(savedValues).some(v => v && getFencerById(v));
+    const canEnterTableau = localStorage.getItem('canEnterTableau') === 'true';
     
     navButtons.forEach(btn => {
         if(btn.textContent === 'Tableau eintragen') {
-            btn.style.display = hasData ? 'none' : 'inline-block';
+            // Button nur anzeigen wenn:
+            // - KEIN Tableau existiert UND
+            // - das Flag "canEnterTableau" gesetzt ist
+            btn.style.display = (!hasData && canEnterTableau) ? 'inline-block' : 'none';
         }
     });
 }
@@ -1528,6 +1630,102 @@ function joinEventById() {
     }
 }
 
+// QR-Code Scanner Variablen
+let qrScannerInstance = null;
+let qrScannerRunning = false;
+
+// QR-Code Scanner starten
+function startQRScanner() {
+    const scannerElement = document.getElementById('qr-scanner');
+    if(!scannerElement) return;
+
+    if(typeof Html5Qrcode === 'undefined') {
+        logger.error('Html5Qrcode Library nicht geladen');
+        alert('QR-Code Scanner konnte nicht geladen werden. Bitte laden Sie die Seite neu.');
+        return;
+    }
+
+    try {
+        qrScannerInstance = new Html5Qrcode('qr-scanner');
+        qrScannerRunning = true;
+
+        const qrConfig = { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 } 
+        };
+
+        qrScannerInstance.start(
+            { facingMode: 'environment' }, // Rückkamera verwenden
+            qrConfig,
+            (decodedText) => {
+                onQRCodeScanned(decodedText);
+                stopQRScanner();
+            },
+            (errorMessage) => {
+                // Fehler ignorieren - wird nur bei bestimmten Bedingungen ausgelöst
+            }
+        ).catch((err) => {
+            logger.error('Fehler beim Starten des QR-Scanners:', err);
+            alert('Kamera konnte nicht gestartet werden. Bitte überprüfen Sie die Berechtigungen.');
+            qrScannerRunning = false;
+        });
+    } catch(e) {
+        logger.error('QR-Scanner Fehler:', e);
+        alert('Fehler beim Initialisieren des QR-Scanners: ' + e.message);
+        qrScannerRunning = false;
+    }
+}
+
+// QR-Code Scanner stoppen
+function stopQRScanner() {
+    if(qrScannerInstance && qrScannerRunning) {
+        qrScannerInstance.stop().then(() => {
+            qrScannerRunning = false;
+            logger.info('QR-Code Scanner gestoppt');
+        }).catch((err) => {
+            logger.warn('Fehler beim Stoppen des Scanners:', err);
+            qrScannerRunning = false;
+        });
+    }
+}
+
+// QR-Code wurde gescannt
+function onQRCodeScanned(decodedText) {
+    logger.info('QR-Code gescannt:', decodedText);
+    
+    try {
+        // Versuche Event-ID aus der URL zu extrahieren
+        const url = new URL(decodedText);
+        const eventId = url.searchParams.get('eventId');
+        
+        if(eventId) {
+            // Event-ID in die Input-Feld einfügen und automatisch verbinden
+            const inputField = document.getElementById('eventIdInput');
+            if(inputField) {
+                inputField.value = eventId;
+                
+                const resultDiv = document.getElementById('scanResult');
+                if(resultDiv) {
+                    resultDiv.innerHTML = `<span style="color: #4caf50; font-weight: bold;">✓ QR-Code erkannt: ${eventId}</span>`;
+                }
+                
+                // Automatisch verbinden
+                setTimeout(() => {
+                    joinEventById();
+                }, 500);
+            }
+        } else {
+            throw new Error('Keine Event-ID im QR-Code gefunden');
+        }
+    } catch(e) {
+        logger.error('Fehler beim Verarbeiten des gescannten QR-Codes:', e);
+        const resultDiv = document.getElementById('scanResult');
+        if(resultDiv) {
+            resultDiv.innerHTML = `<span style="color: #f44336; font-weight: bold;">✗ Ungültiger QR-Code</span>`;
+        }
+    }
+}
+
 // Hilfsfunktion: URL Parameter lesen und Auto-Join
 function checkEventIdFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -1559,15 +1757,28 @@ checkEventIdFromUrl();
 
 // Initialisiere Lane-Einstellungen mit 4 Bahnen als Standard
 function initializeLaneSettings() {
-    // Prüfe ob alte 5-Bahnen-Einstellung vorhanden ist
+    // Prüfe ob Bahnen-Einstellung vorhanden ist
     const savedColors = localStorage.getItem('laneColors');
     const savedNames = localStorage.getItem('laneNames');
     
-    // Wenn nichts gespeichert oder alte Einstellungen: überschreibe mit 4 Bahnen
+    // Wenn nichts gespeichert: initialisiere mit 5 Bahnen
     if(!savedColors || !savedNames) {
         localStorage.setItem('laneColors', JSON.stringify(defaultLaneColors));
         localStorage.setItem('laneNames', JSON.stringify(defaultLaneNames));
-        logger.info('Lane-Einstellungen initialisiert mit 4 Bahnen');
+        logger.info('Lane-Einstellungen initialisiert mit 5 Bahnen');
+    } else {
+        // Prüfe ob alte 4-Bahnen-Einstellung vorhanden ist und aktualisiere auf 5
+        try {
+            const colors = JSON.parse(savedColors);
+            const names = JSON.parse(savedNames);
+            if(colors.length === 4 && names.length === 4) {
+                localStorage.setItem('laneColors', JSON.stringify(defaultLaneColors));
+                localStorage.setItem('laneNames', JSON.stringify(defaultLaneNames));
+                logger.info('Lane-Einstellungen aktualisiert von 4 auf 5 Bahnen');
+            }
+        } catch(e) {
+            logger.error('Fehler beim Aktualisieren der Lane-Einstellungen:', e);
+        }
     }
 }
 
