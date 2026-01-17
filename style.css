@@ -64,8 +64,8 @@ nav button:hover {
 
 /* Main Container */
 main {
-  padding: 20px;
-  max-width: 1200px;
+  padding: 12px;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -129,22 +129,20 @@ button:hover {
 }
 /* Tableau Input Grid */
 .inputs-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
   margin: 20px 0;
-  justify-content: center;
+  padding: 0 10px;
 }
 
 .tableau-input {
-  padding: 10px;
+  padding: 12px;
   font-size: 16px;
   border: 2px solid #023b82;
   border-radius: 4px;
   text-align: center;
-  flex: 0 1 80px;
-  min-width: 60px;
-  width: 80px;
+  width: 100%;
 }
 
 .tableau-input:focus {
@@ -156,12 +154,16 @@ button:hover {
 
 /* Settings Container */
 .settings-container {
-  max-width: 500px;
-  margin: 30px auto;
-  padding: 20px;
+  width: 100%;
+  max-width: 100%;
+  margin: 20px auto;
+  padding: 15px;
   background-color: #f5f5f5;
   border-radius: 8px;
   text-align: center;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
 }
 
 .settings-section {
@@ -219,8 +221,8 @@ button:hover {
 
 #laneSettingsContainer {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 15px;
   margin: 20px 0;
 }
 
@@ -583,7 +585,7 @@ button:hover {
 }
 
 .callroom-lane {
-  width: 260px;
+  width: 100%;
   min-height: 120px;
   background: #fff;
   border: 2px solid #023b82;
@@ -592,6 +594,8 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1 1 240px;
+  max-width: 100%;
 }
 
 .empty-lane {
@@ -701,8 +705,9 @@ button:hover {
 
 /* Missing Fencers */
 .missing-fencers-list {
-  margin: 20px auto;
-  max-width: 600px;
+  margin: 15px 0;
+  width: 100%;
+  max-width: 100%;
   background: white;
   border-radius: 8px;
   overflow: hidden;
@@ -727,8 +732,8 @@ button:hover {
 
 .zeitplan-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .zeitplan-item {
@@ -788,8 +793,8 @@ button:hover {
 
 .tableau-rounds {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 15px;
   margin: 15px 0;
 }
 
@@ -1007,7 +1012,7 @@ button:hover {
 }
 
 .overview-callroom-lane {
-  width: 260px;
+  width: 100%;
   min-height: 120px;
   background: #fff;
   border: 2px solid #023b82;
@@ -1016,6 +1021,8 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1 1 240px;
+  max-width: 100%;
 }
 
 .overview-callroom-lane.empty-lane {
@@ -1080,3 +1087,351 @@ button:hover {
   margin-bottom: 15px;
 }
 
+/* Timer Styles - Base (Mobile-first) */
+#callroom-timer {
+  font-size: 32px;
+  font-weight: bold;
+  text-align: center;
+  margin: 10px 0;
+  color: #023b82;
+  font-family: monospace;
+  padding: 10px;
+}
+
+#callroom-label, #overview-label {
+  font-size: 14px;
+  font-weight: bold;
+  color: #023b82;
+  text-align: center;
+  margin: 8px 0;
+}
+
+.callroom-fencer, .overview-callroom-player {
+  font-size: 13px;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+
+/* Desktop: > 1024px */
+@media (min-width: 1025px) {
+  nav {
+    padding: 12px 0;
+  }
+
+  nav button {
+    font-size: 15px;
+    padding: 10px 18px;
+    margin: 6px 3px;
+  }
+
+  main {
+    padding: 25px;
+  }
+
+  .callroom-row {
+    gap: 16px;
+  }
+
+  .overview-callroom-row {
+    gap: 16px;
+  }
+
+  .callroom-lane, .overview-callroom-lane {
+    width: 280px;
+    min-height: 140px;
+  }
+
+  .tableau-rounds {
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
+  }
+
+  .settings-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+  }
+
+  .zeitplan-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+  }
+}
+
+/* Tablet: 768px - 1024px */
+@media (min-width: 768px) and (max-width: 1024px) {
+  nav {
+    padding: 10px 0;
+  }
+
+  nav button {
+    font-size: 13px;
+    padding: 8px 12px;
+    margin: 4px 2px;
+  }
+
+  main {
+    padding: 18px;
+  }
+
+  .callroom-row, .overview-callroom-row {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .callroom-lane, .overview-callroom-lane {
+    width: calc(50% - 6px);
+    min-height: 120px;
+  }
+
+  .callroom-lane.empty-lane, .overview-callroom-lane.empty-lane {
+    width: calc(50% - 6px);
+  }
+
+  .tableau-rounds {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 15px;
+  }
+
+  .settings-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .zeitplan-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .zeitplan-item {
+    padding: 8px;
+    font-size: 13px;
+  }
+
+  .zeitplan-item input {
+    font-size: 12px;
+  }
+
+  #callroom-timer {
+    font-size: 36px;
+  }
+
+  .callroom-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* Mobile: < 768px */
+@media (max-width: 767px) {
+  nav {
+    padding: 8px 0;
+    overflow-x: auto;
+  }
+
+  nav button {
+    font-size: 12px;
+    padding: 7px 10px;
+    margin: 3px 2px;
+    white-space: nowrap;
+  }
+
+  main {
+    padding: 12px;
+  }
+
+  h1 {
+    font-size: 24px;
+    margin: 10px 0;
+  }
+
+  .callroom-row, .overview-callroom-row {
+    gap: 10px;
+    flex-direction: column;
+  }
+
+  .callroom-lane, .overview-callroom-lane {
+    width: 100%;
+    min-height: 100px;
+  }
+
+  .callroom-lane.empty-lane, .overview-callroom-lane.empty-lane {
+    width: 100%;
+  }
+
+  .callroom-controls, .overview-controls {
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .callroom-controls button, .overview-controls button {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  .callroom-controls select, .overview-controls select {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  #callroom-label, #overview-label {
+    font-size: 13px;
+    margin: 8px 0;
+  }
+
+  #callroom-timer {
+    font-size: 32px;
+    margin-bottom: 10px;
+  }
+
+  #callroom-timer-stop, #callroom-fertig-aufgestellt {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px 16px;
+  }
+
+  .tableau-rounds {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .tableau-match {
+    font-size: 12px;
+  }
+
+  .settings-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .settings-section {
+    padding: 12px;
+  }
+
+  .settings-section h3 {
+    font-size: 16px;
+  }
+
+  .lane-setting-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .zeitplan-round {
+    padding: 12px;
+    margin: 10px 0;
+  }
+
+  .zeitplan-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .zeitplan-item {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .zeitplan-item input {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .missing-durchgang-group {
+    padding: 10px;
+    margin: 10px 0;
+  }
+
+  .missing-fencers-list {
+    grid-template-columns: 1fr;
+  }
+
+  .inputs-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .inputs-grid input {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .log-modal {
+    width: 95vw;
+    max-height: 80vh;
+  }
+
+  .log-content {
+    max-height: 60vh;
+  }
+}
+
+/* Very Small Mobile: < 480px */
+@media (max-width: 479px) {
+  nav {
+    padding: 6px 0;
+  }
+
+  nav button {
+    font-size: 11px;
+    padding: 6px 8px;
+    margin: 2px 1px;
+  }
+
+  main {
+    padding: 10px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  .callroom-lane, .overview-callroom-lane {
+    min-height: 90px;
+    padding: 8px;
+  }
+
+  .callroom-fencer, .overview-callroom-player {
+    font-size: 12px;
+    padding: 6px 8px;
+    min-height: 18px;
+  }
+
+  #callroom-timer {
+    font-size: 28px;
+  }
+
+  #callroom-timer-stop, #callroom-fertig-aufgestellt {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  #callroom-label, #overview-label {
+    font-size: 11px;
+  }
+
+  .callroom-controls button, .overview-controls button {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .settings-section {
+    padding: 10px;
+  }
+
+  .settings-section h3 {
+    font-size: 14px;
+  }
+
+  .zeitplan-item {
+    font-size: 11px;
+    padding: 6px;
+  }
+
+  .zeitplan-round h3 {
+    font-size: 14px;
+  }
+}
