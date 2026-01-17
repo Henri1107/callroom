@@ -10,7 +10,7 @@ let isAuthenticated = false;
 // Standard Admin-Benutzer
 const DEFAULT_ADMIN = {
     username: 'admin',
-    password: 'admin'  // In Produktion sollte dies gehashed sein
+    password: 'Fechtertage2026'  // In Produktion sollte dies gehashed sein
 };
 
 // Alle verfügbaren Navigationstabs
