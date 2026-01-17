@@ -14,7 +14,7 @@ const DEFAULT_ADMIN = {
 };
 
 // Alle verfügbaren Navigationstabs
-const ALL_TABS = ['home', 'settings', 'overview', 'missing_fencers', 'tableau', 'tableau_input', 'workspace', 'podium', 'sync'];
+const ALL_TABS = ['home', 'settings', 'overview', 'missing_fencers', 'tableau', 'tableau_input', 'workspace', 'zeitplan', 'sync'];
 
 // Variablen für Firebase-Listener
 let usersListenerActive = false;
@@ -582,6 +582,18 @@ function initializeFirebaseSync(eventId) {
             try { renderCallroomOverview(); } catch(e) {}
         }
     });
+
+    // Höre auf Änderungen am Zeitplan (Startzeiten je Durchgang)
+    const scheduleRef = firebaseDB.ref(`events/${eventId}/callroomSchedule`);
+    scheduleRef.on('value', (snapshot) => {
+        if(snapshot.exists()) {
+            const schedule = snapshot.val();
+            localStorage.setItem(`callroomSchedule_${eventId}`, JSON.stringify(schedule));
+            logger.info('✓ Zeitplan von Firebase aktualisiert');
+            try { renderCallroomOverview(); } catch(e) {}
+            try { renderZeitplanPage(); } catch(e) {}
+        }
+    });
     
     return true;
 }
@@ -624,6 +636,26 @@ function syncCallroomStatusesToFirebase(statuses) {
     firebaseDB.ref(`events/${currentEventId}/callroomStatuses`).set(statuses)
         .then(() => logger.info('✓ Callroom-Status zu Firebase synchronisiert'))
         .catch(error => logger.error('✗ Fehler beim Synchronisieren des Callroom-Status:', error));
+}
+
+function syncCallroomScheduleToFirebase(schedule) {
+    if(!currentEventId) {
+        logger.warn('syncCallroomScheduleToFirebase: Keine Event ID');
+        return;
+    }
+    if(!firebaseDB) {
+        logger.warn('syncCallroomScheduleToFirebase: Firebase nicht initialisiert');
+        return;
+    }
+    if(!firebaseSyncEnabled) {
+        logger.warn('syncCallroomScheduleToFirebase: Firebase Sync nicht aktiviert');
+        return;
+    }
+
+    logger.info('Speichere Zeitplan zu Firebase:', currentEventId);
+    firebaseDB.ref(`events/${currentEventId}/callroomSchedule`).set(schedule)
+        .then(() => logger.info('✓ Zeitplan zu Firebase synchronisiert'))
+        .catch(error => logger.error('✗ Fehler beim Synchronisieren des Zeitplans:', error));
 }
 
 function syncLaneColorsToFirebase(colors) {
@@ -1255,6 +1287,7 @@ function renderOverviewDisplay(container) {
     const laneNames = getLaneNames();
     const totalRounds = koTreeState.rounds.length;
     const statuses = getCallroomStatuses();
+    const schedule = getCallroomSchedule();
     
     // Initialisiere overviewRoundIndex und overviewGroupIndex falls nicht vorhanden
     if(window.overviewRoundIndex === undefined) window.overviewRoundIndex = 0;
@@ -1306,7 +1339,9 @@ function renderOverviewDisplay(container) {
     }
     
     html += '</select>';
-    html += `<span style="font-weight:bold; font-size: 14px; min-width: 120px;">Durchgang ${currentGroup + 1} / ${Math.max(1, groups.length)}</span>`;
+    const roundSchedule = schedule[currentRound] || {};
+    const currentStart = roundSchedule[currentGroup] || '';
+    html += `<span style="font-weight:bold; font-size: 14px; min-width: 160px;">Durchgang ${currentGroup + 1} / ${Math.max(1, groups.length)} • Start: ${currentStart || '–'}</span>`;
     html += `<button id="overview-next" style="padding: 8px 12px; background-color: #5bd2fe; color: #023b82; border: 2px solid #023b82; border-radius: 4px; cursor: pointer; font-weight: bold;">→</button>`;
     html += '</div>';
 
@@ -1386,6 +1421,8 @@ function renderOverviewDisplay(container) {
 // =============================
 
 const CALLER_STATUSES = ['Abwesend','Anwesend','kontrolliert'];
+let callroomTimerInterval = null;
+let callroomTimerRunning = false;
 
 function getCallroomStatuses() {
     const key = `callroomStatuses_${currentEventId || 'local'}`;
@@ -1396,6 +1433,108 @@ function getCallroomStatuses() {
 function saveCallroomStatuses(obj) {
     const key = `callroomStatuses_${currentEventId || 'local'}`;
     localStorage.setItem(key, JSON.stringify(obj));
+}
+
+function getCallroomSchedule() {
+    const key = `callroomSchedule_${currentEventId || 'local'}`;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+}
+
+function saveCallroomSchedule(schedule) {
+    const key = `callroomSchedule_${currentEventId || 'local'}`;
+    localStorage.setItem(key, JSON.stringify(schedule));
+    if(firebaseSyncEnabled && currentEventId && firebaseDB) {
+        syncCallroomScheduleToFirebase(schedule);
+    }
+}
+
+function clearCallroomTimerInterval() {
+    if(callroomTimerInterval) {
+        clearInterval(callroomTimerInterval);
+        callroomTimerInterval = null;
+    }
+}
+
+function stopCallroomTimer() {
+    callroomTimerRunning = false;
+    clearCallroomTimerInterval();
+    const stopBtn = document.getElementById('callroom-timer-stop');
+    if(stopBtn) {
+        stopBtn.disabled = true;
+        stopBtn.textContent = 'Timer gestoppt';
+    }
+}
+
+function startCallroomTimer(roundIdx, groupIdx) {
+    const timerEl = document.getElementById('callroom-timer');
+    const stopBtn = document.getElementById('callroom-timer-stop');
+    clearCallroomTimerInterval();
+
+    if(stopBtn) {
+        stopBtn.disabled = false;
+        stopBtn.textContent = 'Timer stoppen';
+    }
+
+    if(!timerEl) return;
+
+    const schedule = getCallroomSchedule();
+    const roundSchedule = schedule[roundIdx] || {};
+    const startStr = roundSchedule[groupIdx];
+    if(!startStr) {
+        timerEl.textContent = 'Timer: --:--';
+        if(stopBtn) stopBtn.disabled = true;
+        return;
+    }
+
+    const parts = startStr.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if(Number.isNaN(h) || Number.isNaN(m)) {
+        timerEl.textContent = 'Timer: --:--';
+        if(stopBtn) stopBtn.disabled = true;
+        return;
+    }
+
+    callroomTimerRunning = true;
+
+    const updateTimer = () => {
+        const now = new Date();
+        const start = new Date();
+        start.setHours(h, m, 0, 0);
+        const target = new Date(start.getTime() - 3 * 60 * 1000); // 3 Minuten vor Startzeit
+
+        let diff = target.getTime() - now.getTime();
+        let prefix = '';
+        if(diff > 0) {
+            prefix = '-'; // vor 0: rückwärts zählen
+        } else if(diff < 0) {
+            diff = Math.abs(diff);
+            prefix = '+'; // nach 0: aufwärts zählen
+        }
+
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        const mm = String(mins).padStart(2, '0');
+        const ss = String(secs).padStart(2, '0');
+        timerEl.textContent = `Timer: ${prefix}${mm}:${ss}`;
+    };
+
+    updateTimer();
+    callroomTimerInterval = setInterval(() => {
+        if(!callroomTimerRunning) return;
+        updateTimer();
+    }, 1000);
+
+    if(stopBtn) {
+        stopBtn.onclick = (e) => {
+            e.preventDefault();
+            callroomTimerRunning = false;
+            clearCallroomTimerInterval();
+            stopBtn.disabled = true;
+            stopBtn.textContent = 'Timer gestoppt';
+        };
+    }
 }
 
 function renderCallroomOverview() {
@@ -1431,10 +1570,16 @@ function renderCallroomOverview() {
 
     const currentGroup = groups[callroomGroupIndex] || [];
     const statuses = getCallroomStatuses();
+    const schedule = getCallroomSchedule();
 
     // Update label
     const label = document.getElementById('callroom-label');
-    if(label) label.textContent = `Durchgang ${callroomGroupIndex + 1} / ${Math.max(1, groups.length)}`;
+    const roundSchedule = schedule[callroomRoundIndex] || {};
+    const currentStart = roundSchedule[callroomGroupIndex] || '';
+    const labelText = `Durchgang ${callroomGroupIndex + 1} / ${Math.max(1, groups.length)}${currentStart ? ' • Start: ' + currentStart : ' • Start: –'}`;
+    if(label) label.textContent = labelText;
+    // Timer starten/aktualisieren
+    startCallroomTimer(callroomRoundIndex, callroomGroupIndex);
 
     // Update round select options (use KO size label)
     const roundSelect = document.getElementById('callroom-round-select');
@@ -1479,9 +1624,12 @@ function renderCallroomOverview() {
         const bgColor2 = statusColors[s2] || '#fff';
         const laneColor = laneColors[lane] || '#5bd2fe';
 
-        const swapDisplay = window.callroomSeitenBestaetigt ? 'display: none;' : '';
-        const fencerClickable = window.callroomSeitenBestaetigt ? '' : `onclick="toggleFencerStatus(${matchIndex}, 1)"`;
-        const fencerClickable2 = window.callroomSeitenBestaetigt ? '' : `onclick="toggleFencerStatus(${matchIndex}, 2)"`;
+        // Nur bei "Fertig aufgestellt" vollständig sperren, bei "Seiten bestätigt" nur Swap sperren
+        const isFullyLocked = window.callroomFertigAufgestellt;
+        const isSwapDisabled = window.callroomSeitenBestaetigt || window.callroomFertigAufgestellt;
+        const swapDisplay = isSwapDisabled ? 'display: none;' : '';
+        const fencerClickable = isFullyLocked ? '' : `onclick="toggleFencerStatus(${matchIndex}, 1)"`;
+        const fencerClickable2 = isFullyLocked ? '' : `onclick="toggleFencerStatus(${matchIndex}, 2)"`;
 
         html += `
             <div class="callroom-lane" data-match-index="${matchIndex}">
@@ -1505,6 +1653,71 @@ function renderCallroomOverview() {
     html += '</div>';
 
     container.innerHTML = html;
+}
+
+function renderZeitplanPage() {
+    const container = document.getElementById('zeitplan-content');
+    if(!container) return;
+
+    if(!koTreeState || !koTreeState.rounds || koTreeState.rounds.length === 0) {
+        container.innerHTML = '<p>Kein Turnier geladen. Bitte erstelle ein Tableau.</p>';
+        return;
+    }
+
+    const schedule = getCallroomSchedule();
+    const totalRounds = koTreeState.rounds.length;
+    let html = '';
+
+    for(let r = 0; r < totalRounds; r++) {
+        const matches = koTreeState.rounds[r] || [];
+        const laneCount = 4;
+        const quarterSize = Math.ceil(matches.length / laneCount) || 1;
+        const roundSchedule = schedule[r] || {};
+
+        const remainingFencers = Math.pow(2, totalRounds - r);
+        let koSizeLabel;
+        if(remainingFencers === 2) koSizeLabel = 'Finale';
+        else if(remainingFencers === 4) koSizeLabel = 'Halbfinale';
+        else koSizeLabel = `${remainingFencers}er KO`;
+
+        html += `<div class="zeitplan-round">`;
+        html += `<h3>${koSizeLabel}</h3>`;
+        html += '<div class="zeitplan-grid">';
+
+        for(let g = 0; g < quarterSize; g++) {
+            const val = roundSchedule[g] || '';
+            html += `
+                <div class="zeitplan-item">
+                    <div style="font-weight:bold; margin-bottom:6px;">Durchgang ${g + 1}</div>
+                    <input type="time" class="zeitplan-time-input" data-round="${r}" data-group="${g}" value="${val}" />
+                </div>
+            `;
+        }
+
+        html += '</div></div>';
+    }
+
+    container.innerHTML = html;
+
+    const inputs = container.querySelectorAll('.zeitplan-time-input');
+    inputs.forEach(input => {
+        input.addEventListener('change', () => {
+            const r = parseInt(input.dataset.round, 10);
+            const g = parseInt(input.dataset.group, 10);
+            schedule[r] = schedule[r] || {};
+            schedule[r][g] = input.value;
+            saveCallroomSchedule(schedule);
+            renderCallroomOverview();
+        });
+    });
+
+    const saveBtn = document.getElementById('zeitplan-save-btn');
+    if(saveBtn) {
+        saveBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            saveCallroomSchedule(schedule);
+        });
+    }
 }
 
 function prevDurchgang() {
@@ -1559,14 +1772,26 @@ function updateSeitenButtonState() {
     const btn = document.getElementById('callroom-seiten-bestaetigt');
     const prevBtn = document.getElementById('callroom-prev');
     const nextBtn = document.getElementById('callroom-next');
+    const fertigBtn = document.getElementById('callroom-fertig-aufgestellt');
     
     if(!btn) return;
     
+    const allDisabled = window.callroomFertigAufgestellt;
+    
     if(window.callroomSeitenBestaetigt) {
-        // Bestätigt: Button zeigt "Bestätigung löschen", Prev/Next disabled
+        // Seiten bestätigt: Button zeigt "Bestätigung löschen", Prev/Next disabled (wenn nicht fertig aufgestellt)
         btn.textContent = 'Bestätigung löschen';
         btn.style.backgroundColor = '#ff6b6b';
         btn.style.borderColor = '#ff6b6b';
+    } else {
+        // Nicht bestätigt: Button zeigt "Seiten bestätigt", Prev/Next aktiviert (wenn nicht fertig aufgestellt)
+        btn.textContent = 'Seiten bestätigt';
+        btn.style.backgroundColor = '#4caf50';
+        btn.style.borderColor = '#4caf50';
+    }
+    
+    // Deaktiviere Prev/Next, wenn entweder Seiten bestätigt ODER fertig aufgestellt
+    if(window.callroomSeitenBestaetigt || allDisabled) {
         if(prevBtn) {
             prevBtn.disabled = true;
             prevBtn.style.opacity = '0.5';
@@ -1578,10 +1803,6 @@ function updateSeitenButtonState() {
             nextBtn.style.cursor = 'not-allowed';
         }
     } else {
-        // Nicht bestätigt: Button zeigt "Seiten bestätigt", Prev/Next aktiviert
-        btn.textContent = 'Seiten bestätigt';
-        btn.style.backgroundColor = '#4caf50';
-        btn.style.borderColor = '#4caf50';
         if(prevBtn) {
             prevBtn.disabled = false;
             prevBtn.style.opacity = '1';
@@ -1592,6 +1813,17 @@ function updateSeitenButtonState() {
             nextBtn.style.opacity = '1';
             nextBtn.style.cursor = 'pointer';
         }
+    }
+    
+    // Deaktiviere "Seiten bestätigt" Button, wenn fertig aufgestellt
+    if(allDisabled) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    } else {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
     }
 }
 
@@ -1610,6 +1842,49 @@ function toggleSeitenBestaetigung() {
             window.callroomSeitenBestaetigt = false;
             localStorage.setItem(`callroomSeitenBestaetigt_${currentEventId || 'local'}`, 'false');
             updateSeitenButtonState();
+            renderCallroomOverview();
+        }
+    }
+}
+
+function updateFertigAufgestellButtonState() {
+    const btn = document.getElementById('callroom-fertig-aufgestellt');
+    if(!btn) return;
+    
+    if(window.callroomFertigAufgestellt) {
+        // Fertig: Button zeigt "Bestätigung zurückziehen", großes visuelles Feedback
+        btn.textContent = 'Bestätigung zurückziehen';
+        btn.style.backgroundColor = '#ff9800';
+        btn.style.borderColor = '#ff9800';
+        btn.style.fontSize = '18px';
+        btn.style.padding = '15px 30px';
+        document.body.style.backgroundColor = '#c8e6c9';
+    } else {
+        // Nicht fertig: Button zeigt "Fertig aufgestellt", normales Aussehen
+        btn.textContent = 'Fertig aufgestellt';
+        btn.style.backgroundColor = '#2196F3';
+        btn.style.borderColor = '#2196F3';
+        btn.style.fontSize = '16px';
+        btn.style.padding = '12px 24px';
+        document.body.style.backgroundColor = '';
+    }
+}
+
+function toggleFertigAufgestellt() {
+    if(!window.callroomFertigAufgestellt) {
+        // Wechsel zu "fertig"
+        if(confirm('Bestätigen Sie, dass alle Fechter aufgestellt sind und der Wettbewerb beginnen kann? Nach dieser Bestätigung können Sie nichts mehr ändern.')) {
+            window.callroomFertigAufgestellt = true;
+            localStorage.setItem(`callroomFertigAufgestellt_${currentEventId || 'local'}`, 'true');
+            updateFertigAufgestellButtonState();
+            renderCallroomOverview();
+        }
+    } else {
+        // Wechsel zu "nicht fertig"
+        if(confirm('Möchten Sie die Fertigstellung zurückziehen? Sie können dann wieder Änderungen vornehmen.')) {
+            window.callroomFertigAufgestellt = false;
+            localStorage.setItem(`callroomFertigAufgestellt_${currentEventId || 'local'}`, 'false');
+            updateFertigAufgestellButtonState();
             renderCallroomOverview();
         }
     }
@@ -1785,14 +2060,23 @@ const pages = {
             <select id="callroom-round-select" style="margin: 0 8px;"></select>
             <span id="callroom-label" style="margin: 0 12px; font-weight:bold;">Durchgang 1 / 1</span>
             <button id="callroom-next">→</button>
-            <button id="show-logs-btn" style="margin-left:12px;">Logs</button>
             <button id="callroom-seiten-bestaetigt" style="margin-left:20px; padding: 8px 16px; background-color: #4caf50; color: white; border: 2px solid #4caf50; border-radius: 4px; font-weight: bold; cursor: pointer;">Seiten bestätigt</button>
         </div>
         <div id="callroom-overview" class="callroom-overview"></div>
+        <div style="text-align:center; margin: 25px 0 20px 0;">
+            <div id="callroom-timer" style="font-weight: bold; color: #023b82; font-size: 48px; margin-bottom: 12px;">Timer: --:--</div>
+            <button id="callroom-timer-stop" style="padding: 10px 20px; background-color: #ff6b6b; color: white; border: 2px solid #ff6b6b; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px;">Timer stoppen</button>
+        </div>
+        <div style="text-align:center; margin: 30px 0;">
+            <button id="callroom-fertig-aufgestellt" style="padding: 12px 24px; background-color: #2196F3; color: white; border: 2px solid #2196F3; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px;">Fertig aufgestellt</button>
+        </div>
     `,
-    podium: `
-        <h1>Podium</h1>
-        <p>Hier findest du das Podium.</p>
+    zeitplan: `
+        <h1>Zeitplan</h1>
+        <div id="zeitplan-content"></div>
+        <div style="text-align:center; margin: 20px 0;">
+            <button id="zeitplan-save-btn" style="padding: 10px 20px; background-color: #023b82; color: white; border: 2px solid #023b82; border-radius: 4px; font-weight: bold; cursor: pointer;">Zeiten speichern</button>
+        </div>
     `,
     sync: `
         <h1>Verbindung</h1>
@@ -1800,6 +2084,9 @@ const pages = {
     `,
     permissions: `
         <h1>Berechtigungen</h1>
+        <div style="text-align:center; margin: 15px 0;">
+            <button id="show-logs-btn" style="padding: 8px 16px; background-color: #5bd2fe; color: #023b82; border: 2px solid #023b82; border-radius: 4px; font-weight: bold; cursor: pointer;">Logs</button>
+        </div>
         <div id="permissions-content"></div>
     `
 };
@@ -2174,16 +2461,18 @@ function navigate(pageId) {
 
         const prevBtn = document.getElementById('callroom-prev');
         const nextBtn = document.getElementById('callroom-next');
-        const showLogsBtn = document.getElementById('show-logs-btn');
         const seitenBtn = document.getElementById('callroom-seiten-bestaetigt');
+        const fertigBtn = document.getElementById('callroom-fertig-aufgestellt');
+        const stopTimerBtn = document.getElementById('callroom-timer-stop');
 
         // Hole Bestätigungsstatus aus localStorage
         window.callroomSeitenBestaetigt = localStorage.getItem(`callroomSeitenBestaetigt_${currentEventId || 'local'}`) === 'true';
+        window.callroomFertigAufgestellt = localStorage.getItem(`callroomFertigAufgestellt_${currentEventId || 'local'}`) === 'true';
         updateSeitenButtonState();
+        updateFertigAufgestellButtonState();
 
         if(prevBtn) prevBtn.addEventListener('click', (e) => { e.preventDefault(); prevDurchgang(); });
         if(nextBtn) nextBtn.addEventListener('click', (e) => { e.preventDefault(); nextDurchgang(); });
-        if(showLogsBtn) showLogsBtn.addEventListener('click', (e) => { e.preventDefault(); showLogPanel(); });
         
         if(seitenBtn) {
             seitenBtn.addEventListener('click', (e) => {
@@ -2192,7 +2481,26 @@ function navigate(pageId) {
             });
         }
 
+        if(fertigBtn) {
+            fertigBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleFertigAufgestellt();
+            });
+        }
+
+        if(stopTimerBtn) {
+            stopTimerBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                stopCallroomTimer();
+            });
+        }
+
         renderCallroomOverview();
+    }
+
+    // Zeitplan-Seite: Startzeiten pro Durchgang pflegen
+    if(pageId === 'zeitplan') {
+        renderZeitplanPage();
     }
 
     // Fehlende Fechter Seite
@@ -2343,6 +2651,10 @@ function navigate(pageId) {
     
     // Berechtigungen-Seite (nur für Admin sichtbar)
     if(pageId === 'permissions') {
+        // Event Listener für Logs Button
+        const showLogsBtn = document.getElementById('show-logs-btn');
+        if(showLogsBtn) showLogsBtn.addEventListener('click', (e) => { e.preventDefault(); showLogPanel(); });
+        
         if(!currentUser || !currentUser.isAdmin) {
             document.getElementById('permissions-content').innerHTML = '<p style="color: #f44336;">Sie haben keine Berechtigung für diese Seite.</p>';
             return;
@@ -2534,7 +2846,7 @@ function updateNavigationButtons() {
         'Tableau': 'tableau',
         'Tableau eintragen': 'tableau_input',
         'Callroom': 'workspace',
-        'Podium': 'podium',
+        'Zeitplan': 'zeitplan',
         'Verbindung': 'sync',
         'Berechtigungen': 'permissions'
     };
@@ -2560,11 +2872,10 @@ function updateNavigationButtons() {
             if(pageId === 'permissions') {
                 // Nur Admin sieht Permissions-Tab
                 btn.style.display = (currentUser && currentUser.isAdmin) ? 'inline-block' : 'none';
-            } else if(currentUser && currentUser.permissions.includes(pageId)) {
-                // Benutzer sieht nur Tabs, für die er Berechtigung hat
-                btn.style.display = 'inline-block';
             } else {
-                btn.style.display = 'none';
+                const hasZeitplanFallback = pageId === 'zeitplan' && currentUser && currentUser.permissions.includes('podium');
+                const hasPerm = currentUser && currentUser.permissions && (currentUser.permissions.includes(pageId) || hasZeitplanFallback);
+                btn.style.display = hasPerm ? 'inline-block' : 'none';
             }
         }
     });

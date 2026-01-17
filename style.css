@@ -716,6 +716,37 @@ button:hover {
   font-size: 16px;
 }
 
+/* Zeitplan */
+.zeitplan-round {
+  border: 2px solid #023b82;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 16px 0;
+  background: #f9f9f9;
+}
+
+.zeitplan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.zeitplan-item {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  text-align: center;
+}
+
+.zeitplan-item input {
+  width: 100%;
+  padding: 8px;
+  border: 2px solid #023b82;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
 .missing-fencer-entry:last-child {
   border-bottom: none;
 }
