@@ -4,7 +4,6 @@
   "theme_color": "#004aad",
   "background_color": "#19f7f9",
   "display": "standalone",
-  "orientation": "landscape",
   "start_url": "/callroom/",
   "icons": [
     {
