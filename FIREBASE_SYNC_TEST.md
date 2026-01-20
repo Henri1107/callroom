@@ -36,7 +36,7 @@ Die folgenden Änderungen wurden vorgenommen, um die Firebase-Synchronisierung d
 
 **Gerät A (PC):**
 1. Öffne die App in Chrome: `http://localhost:8000`
-2. Melde dich als Admin an (Benutzer: `admin`, Passwort: `admin`)
+2. Melde dich als Admin an (Benutzer: `admin`, Passwort: `Fechtertage2026!`)
 3. Gehe zu "Berechtigungen" Tab
 4. Erstelle einen neuen Benutzer:
    - Benutzername: `testuser123`
@@ -58,7 +58,7 @@ Die folgenden Änderungen wurden vorgenommen, um die Firebase-Synchronisierung d
    appData/users/
    ├── admin
    │   ├── username: "admin"
-   │   ├── password: "admin"
+   │   ├── password: "Fechtertage2026!"
    │   └── isAdmin: true
    └── testuser123
        ├── username: "testuser123"
