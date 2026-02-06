@@ -2051,7 +2051,11 @@ const pages = {
         <h1>Tableau eintragen</h1>
         <p>Gib die Fechter-IDs ein. Sie werden in der Reihenfolge 1vs64, 2vs63, etc. gepaart.</p>
         <div id="inputs-container" class="inputs-grid"></div>
-        <p><button id="submitTableau">Eintragen</button> <button id="testTableau">Test</button></p>
+        <p>
+            <button id="submitTableau">Eintragen</button> 
+            <button id="testTableau">Test</button>
+            <button id="loadFromXML">Aus XML laden</button>
+        </p>
     `,
     workspace: `
         <h1>Callroom</h1>
@@ -2294,9 +2298,6 @@ function navigate(pageId) {
             koTreeState = null;
             currentEventId = null;
             
-            // Setze Flag, dass Tableau eingegeben werden kann
-            localStorage.setItem('canEnterTableau', 'true');
-            
             alert('✓ Alle Daten gelöscht.\n\nDu kannst jetzt unter "Tableau eintragen" ein neues Turnier erstellen.');
             updateNavigationButtons();
         });
@@ -2340,9 +2341,6 @@ function navigate(pageId) {
                 currentEventId = eventId;
                 localStorage.setItem('currentEventId', eventId);
                 
-                // Lösche das "canEnterTableau" Flag nach erfolgreichem Eintragen
-                localStorage.removeItem('canEnterTableau');
-                
                 // Firebase Sync ZUERST aktivieren, DANN Daten speichern
                 if(firebaseDB) {
                     initializeFirebaseSync(eventId);
@@ -2379,6 +2377,117 @@ function navigate(pageId) {
                 }
                 
                 alert('Test-Daten eingefügt! Klicke "Eintragen" zum Speichern.');
+            });
+        }
+        
+        const loadXMLBtn = document.getElementById('loadFromXML');
+        if(loadXMLBtn) {
+            loadXMLBtn.addEventListener('click', () => {
+                // Erstelle einen versteckten File-Input
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.xml';
+                fileInput.style.display = 'none';
+                
+                fileInput.addEventListener('change', (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const xmlText = e.target.result;
+                            const parser = new DOMParser();
+                            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                            
+                            // Finde das "Main tableau of 64" (B64)
+                            // Suche nach SuiteDeTableaux mit Titel "Main tableau of 64"
+                            const suites = xmlDoc.querySelectorAll('SuiteDeTableaux');
+                            let targetTableau = null;
+                            
+                            for(let suite of suites) {
+                                const suiteTitle = suite.getAttribute('Titre');
+                                if(suiteTitle && suiteTitle.includes('Main tableau of 64')) {
+                                    // Finde das erste Tableau in dieser Suite
+                                    targetTableau = suite.querySelector('Tableau');
+                                    break;
+                                }
+                            }
+                            
+                            // Fallback: Suche direkt nach Tableau mit ID "B64" oder Titre "Tableau of 64"
+                            if(!targetTableau) {
+                                const tableaux = xmlDoc.querySelectorAll('Tableau');
+                                for(let tableau of tableaux) {
+                                    const id = tableau.getAttribute('ID');
+                                    const titre = tableau.getAttribute('Titre');
+                                    const taille = tableau.getAttribute('Taille');
+                                    if((id === 'B64') || (titre === 'Tableau of 64' && taille === '64')) {
+                                        targetTableau = tableau;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if(!targetTableau) {
+                                alert('Kein "Main tableau of 64" in der XML gefunden.');
+                                return;
+                            }
+                            
+                            // Hole alle Matches aus der ersten Runde
+                            const matches = targetTableau.querySelectorAll('Match');
+                            
+                            // Array für 64 Fechter (für Einzel-Modus)
+                            const fencerOrder = new Array(64);
+                            
+                            // Durchlaufe die ersten 32 Matches (erste Runde eines 64er KO)
+                            // Match 1: Fechter 1 vs Fechter 64
+                            // Match 2: Fechter 2 vs Fechter 63
+                            // etc.
+                            const maxMatches = Math.min(32, matches.length);
+                            for(let i = 0; i < maxMatches; i++) {
+                                const match = matches[i];
+                                const tireurs = match.querySelectorAll('Tireur');
+                                
+                                if(tireurs.length >= 2) {
+                                    const fencer1 = tireurs[0].getAttribute('REF');
+                                    const fencer2 = tireurs[1].getAttribute('REF');
+                                    
+                                    // Erster Fechter des Matches kommt in die untere Hälfte (Position i)
+                                    // Zweiter Fechter kommt in die obere Hälfte (Position 63-i)
+                                    if(fencer1) fencerOrder[i] = fencer1;
+                                    if(fencer2) fencerOrder[63 - i] = fencer2;
+                                }
+                            }
+                            
+                            // Prüfe ob wir genug IDs haben
+                            const validCount = fencerOrder.filter(f => f).length;
+                            if(validCount < numInputs) {
+                                alert(`Warnung: Nur ${validCount} Fechter-IDs in der XML gefunden. ${numInputs} werden benötigt.`);
+                            }
+                            
+                            // Fülle die Input-Felder
+                            for(let i = 0; i < numInputs && i < fencerOrder.length; i++) {
+                                const input = document.getElementById(`input-${i+1}`);
+                                if(input && fencerOrder[i]) {
+                                    input.value = fencerOrder[i];
+                                }
+                            }
+                            
+                            alert(`✓ ${validCount} Fechter-IDs aus XML geladen! Paarung: 1 vs 64, 2 vs 63, etc.`);
+                            
+                        } catch(error) {
+                            logger.error('Fehler beim Parsen der XML:', error);
+                            alert('Fehler beim Laden der XML-Datei: ' + error.message);
+                        }
+                    };
+                    
+                    reader.readAsText(file);
+                });
+                
+                // Trigger file selection
+                document.body.appendChild(fileInput);
+                fileInput.click();
+                document.body.removeChild(fileInput);
             });
         }
     }
@@ -2855,10 +2964,9 @@ function updateNavigationButtons() {
         const btnText = btn.textContent.trim();
         const pageId = tabNameMap[btnText];
         
-        // Spezialbehandlung für Tableau eintragen
+        // Tableau eintragen ist immer sichtbar für authentifizierte Benutzer
         if(btnText === 'Tableau eintragen') {
-            btn.style.display = (!hasData && canEnterTableau) ? 'inline-block' : 'none';
-            return;
+            // Keine spezielle Einschränkung mehr
         }
         
         // Nur für authentifizierte Benutzer sichtbar
