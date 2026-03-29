@@ -1,3 +1,29 @@
+/**
+ * ============================================
+ * CALLROOM APP - CASCADING STYLE SHEETS (CSS)
+ * ============================================
+ * 
+ * Diese Datei definiert alle visuellen Styles für die Callroom-App.
+ * Die App ist vollständig responsive und unterstützt:
+ * - Mobile-Geräte (Smartphones) - 480px und darunter
+ * - Tablets - 481px bis 768px
+ * - Desktop-Geräte - 769px und größer
+ * 
+ * Farb-Schema der App:
+ * - Primary Blue: #023b82 (Dunkelblau - Header, Text, Borders)
+ * - Accent Blue: #5bd2fe (Hellblau - Buttons, Highlights)
+ * - Graya: #e5e5e5 (Hellgrau - Hintergrund)
+ * 
+ * Die App verwendet ein Grid-System für Layout-Flexibilität.
+ * ============================================
+ */
+
+/* ============================================
+   GLOBALE STYLES
+   ============================================
+   Diese Styles gelten für alle Elemente auf der Seite
+*/
+
 * {
   box-sizing: border-box;
 }
@@ -9,7 +35,12 @@ body {
   padding: 0;
 }
 
-/* Navigation */
+/* ============================================
+   NAVIGATION BAR
+   ============================================
+   Die Navigation oben mit allen Seiten-Buttons.
+   Ist "sticky" - bleibt beim Scrollen oben hängen.
+*/
 nav {
   overflow: auto;
   text-align: center;
@@ -20,6 +51,7 @@ nav {
   z-index: 100;
 }
 
+/* Navigation Buttons */
 nav button {
   background-color: #5bd2fe;
   color: #023b82;
@@ -35,12 +67,17 @@ nav button {
   transition: all 0.3s ease;
 }
 
+/* Hover-Effekt: Farben tauschen beim Übergehen mit Maus */
 nav button:hover {
   background-color: #023b82;
   color: #5bd2fe;
 }
 
-/* Offline Indicator */
+/* ============================================
+   OFFLINE-INDIKATOR
+   ============================================
+   Warnt den Benutzer, wenn die App offline ist
+*/
 .offline-indicator {
   display: inline-block;
   padding: 8px 15px;
@@ -62,7 +99,11 @@ nav button:hover {
   }
 }
 
-/* Main Container */
+/* ============================================
+   MAIN CONTAINER
+   ============================================
+   Der Haupt-Inhaltsbereich der App
+*/
 main {
   padding: 12px;
   width: 100%;
@@ -80,6 +121,10 @@ p {
   text-align: center;
 }
 
+/* ============================================
+   STANDARD BUTTONS (überall in der App)
+   ============================================
+*/
 button {
   background-color: #5bd2fe;
   color: #023b82;
@@ -121,13 +166,18 @@ button:hover {
 .col-11 { width: 91.66%; }
 .col-12 { width: 100%; }
 
+/* Auf mobilen Geräten: Alle Spalten auf volle Breite setzen */
 @media only screen and (max-width: 768px) {
-    /* For mobile phones: */
     [class*="col-"] {
         width: 100%;
     }
 }
-/* Tableau Input Grid */
+
+/* ============================================
+   TABLEAU-EINGABE GRID
+   ============================================
+   Grid für die 64 oder 16 Input-Felder wo Fechter-IDs eingegeben werden
+*/
 .inputs-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -152,7 +202,11 @@ button:hover {
   background-color: #f0f8ff;
 }
 
-/* Settings Container */
+/* ============================================
+   EINSTELLUNGEN
+   ============================================
+   Styles für die Einstellungsseite
+*/
 .settings-container {
   width: 100%;
   max-width: 100%;
@@ -184,6 +238,7 @@ button:hover {
   font-size: 14px;
 }
 
+/* Toggle Group für Modus-Selektion (Einzel/Team) */
 .toggle-group {
   display: flex;
   gap: 10px;

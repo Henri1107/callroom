@@ -1,18 +1,53 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+    <!-- 
+    ============================================
+    CALLROOM - FECHTER-TURNIER-MANAGEMENT-APP
+    ============================================
+    
+    Diese App verwaltet Fechter-Turniere in KO-Systemen (entweder 64er oder 16er Knockout).
+    Sie bietet Funktionen für:
+    - Turnierplanung und Verwaltung von Gefechten
+    - Anwesenheitstracking der Fechter
+    - Echtzeit-Synchronisierung zwischen mehreren Geräten
+    - Benutzerberechtigungen und Admin-Kontrollen
+    - Offline-Funktionalität durch Service Worker
+    
+    Die App ist responsive und funktioniert auf Desktop, Tablet und Mobile-Geräten.
+    ============================================
+    -->
+    
+    <!-- Grundlegende HTML-Meta-Tags für Encoding und Responsive Design -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <!-- Progressive Web App Manifest - ermöglicht Installation als App und Offline-Support -->
     <link rel="manifest" href="manifest.json">
+    
+    <!-- Externe CSS für Styling -->
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Seiten-Titel (wird in Browser-Tab angezeigt) -->
     <title>Callroom</title>
 </head>
 <body>
+    <!--
+    NAVIGATION BAR
+    Enthält Buttons für alle Hauptseiten der App.
+    Die Buttons sind "sticky" (kleben oben) und scrollen nicht mit der Seite mit.
+    Beachte: Welche Buttons sichtbar sind, hängt vom angemeldeten Benutzer und seinen Berechtigungen ab.
+    -->
     <nav>
+        <!-- 
+        Offline-Indicator: Wird angezeigt wenn die App offline ist
+        Dies zeigt dem Benutzer, dass die App nur lokal arbeitet und Daten werden später synchronisiert
+        -->
         <div id="offline-indicator" class="offline-indicator" style="display: none;" title="App läuft offline">
             <span>📡</span> Offline
         </div>
+        
+        <!-- Navigation Buttons (dynamisch angezeigt basierend auf Berechtigungen) -->
         <button onclick="navigate('home')">Home</button>
         <button onclick="navigate('settings')">Einstellungen</button>
         <button onclick="navigate('overview')">Übersicht</button>
@@ -25,8 +60,14 @@
         <button onclick="navigate('permissions')">Berechtigungen</button>
     </nav>
 
+    <!--
+    MAIN CONTENT AREA
+    Der Inhalt wechselt hier basierend auf der Navigation.
+    Die App ist eine Single-Page-Application (SPA) - die ganze App lädt sich ohne Seitenneuladung neu.
+    -->
     <main id="app">
-        </main>
+        <!-- Platzhalter - wird durch JavaScript mit Inhalten gefüllt -->
+    </main>
 
     <!-- Firebase SDK (compat version - works with global firebase object) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-compat.js"></script>
@@ -40,8 +81,16 @@
     <!-- Firebase Konfiguration -->
     <script src="firebase-config.js"></script>
 
+    <!-- 
+    Haupt-App-Script
+    Enthält all die App-Logik für Turniermanagement, UI-Rendering, etc.
+    -->
     <script src="app.js"></script>
     
+    <!--
+    Initialisierung nach dem DOM ist fertig geladen
+    Dies stellt sicher, dass alle HTML-Elemente die JavaScript benötigt bereits vorhanden sind
+    -->
     <script>
         // Offline-Indicator beim Laden initialisieren
         document.addEventListener('DOMContentLoaded', () => {

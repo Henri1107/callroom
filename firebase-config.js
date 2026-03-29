@@ -1,12 +1,7 @@
 // ============================================
 // FIREBASE KONFIGURATION
 // ============================================
-// Bitte füge deine Firebase Konfiguration hier ein:
-// 
-// Diese erhältst du von: https://console.firebase.google.com/
-// 1. Gehe zu Projekteinstellungen
-// 2. Wähle dein Web-App aus
-// 3. Kopiere die Konfiguration unten ein
+
 
 const firebaseConfig = {
     apiKey: "AIzaSyDMwwSHhZ44TQ9yWvaqzoFERQMEsPtXhW4",
@@ -31,8 +26,16 @@ let firebaseDB = null;
 let firebaseAuth = null;
 let firebaseInitialized = false;
 
+/**
+ * Initialisiert Firebase Database und Auth Services
+ * Diese Funktion wird mehrfach aufgerufen, um sicherzustellen, dass Firebase
+ * richtig geladen ist, auch wenn die Abfolge der Script-Ladevorgänge variiert.
+ * 
+ * @returns {boolean} true wenn erfolgreich, false wenn Fehler
+ */
 function initializeFirebaseServices() {
     try {
+        // Prüfe, ob Firebase SDK vollständig geladen ist
         if(!firebase || !firebase.database) {
             console.warn('⚠️ Firebase SDK nicht verfügbar');
             return false;
@@ -41,7 +44,8 @@ function initializeFirebaseServices() {
         firebaseDB = firebase.database();
         firebaseAuth = firebase.auth();
         
-        // Auch als window Eigenschaft verfügbar machen
+        // Mache diese auch als globale Eigenschaften verfügbar
+        // (damit andere Scripts sie direkt nutzen können)
         window.firebaseDB = firebaseDB;
         window.firebaseAuth = firebaseAuth;
         
@@ -85,7 +89,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Zusätzlicher Fallback bei verzögertem Laden
+/**
+ * Zusätzlicher Fallback nach 1 Sekunde
+ * Dies stellt sicher, dass Firebase auch bei verzögertem Script-Laden initialisiert wird
+ */
 setTimeout(() => {
     if(!firebaseInitialized) {
         console.log('⏳ 1000ms Timeout - Versuche Firebase zu initialisieren');

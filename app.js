@@ -1,26 +1,38 @@
-// 1. Service Worker wird von UpUp verwaltet (siehe index.html)
-// UpUp bietet automatische Offline-Unterstützung ohne zusätzliche sw.js nötig
-
 // ============================================
 // AUTHENTIFIZIERUNG & BENUTZERVERWALTUNG
 // ============================================
+/**
+ * Der aktuelle angemeldete Benutzer
+ * Format: { username, isAdmin, permissions }
+ * null wenn nicht angemeldet
+ */
 let currentUser = null;
 let isAuthenticated = false;
 
 // Standard Admin-Benutzer
 const DEFAULT_ADMIN = {
     username: 'admin',
-    password: 'Fechtertage2026'  // In Produktion sollte dies gehashed sein
+    password: 'Fechtertage2026!' // In Produktion sollte das Passwort gehasht und sicher gespeichert werden
 };
 
-// Alle verfügbaren Navigationstabs
+/**
+ * Alle verfügbaren Navigation Tabs (Seiten) der App
+ * Benutzer können basierend auf ihren Berechtigungen nur bestimmte Tabs sehen
+ */
 const ALL_TABS = ['home', 'settings', 'overview', 'missing_fencers', 'tableau', 'tableau_input', 'workspace', 'zeitplan', 'sync'];
 
-// Variablen für Firebase-Listener
+/**
+ * Firebase Listener Status-Variablen
+ * Diese Flags stellen sicher dass Listener nur einmal gestartet werden
+ */
 let usersListenerActive = false;
 let firebaseUsersLoaded = false;
 
-// Initialisiere Benutzerdatenbank mit Admin-Benutzer
+/**
+ * Initialisiert die Benutzerdatenbank mit einem Standard-Admin-Benutzer
+ * Falls keine Benutzer existieren, wird ein Admin-Konto erstellt.
+ * Versucht dann, Benutzer von Firebase zu laden (falls verfügbar)
+ */
 function initializeUsers() {
     const users = localStorage.getItem('users');
     
@@ -44,7 +56,7 @@ function initializeUsers() {
         loadUsersFromFirebaseOnce();
     } else {
         logger.warn('Firebase nicht verfügbar beim Start, verwende lokale Benutzer');
-        // Starte einen Timer um später zu versuchen
+        // Starte einen Timer um später zu versuchen Firebase zu laden
         setTimeout(() => {
             if(firebaseDB && typeof firebaseDB.ref === 'function' && !firebaseUsersLoaded) {
                 logger.info('Firebase ist jetzt verfügbar, lade Benutzer...');
@@ -69,6 +81,13 @@ function saveUsers(users) {
     }
 }
 
+/**
+ * Synchronisiert die Benutzerliste zu Firebase Realtime Database
+ * Dies ermöglicht es mehreren Geräten die gleiche Benutzerliste zu teilen
+ * 
+ * @param {Object} users - Die zu synchronisierenden Benutzer
+ * @returns {Promise} Promise die sich erfüllt wenn Sync abgeschlossen ist
+ */
 function syncUsersToFirebase(users) {
     if(!firebaseDB || typeof firebaseDB.ref !== 'function') {
         logger.warn('⚠️ Firebase nicht initialisiert - Benutzer nicht synchronisiert');
@@ -88,6 +107,10 @@ function syncUsersToFirebase(users) {
         });
 }
 
+/**
+ * Lädt Benutzer von Firebase einmalig beim App-Start
+ * Dies wird nur einmal aufgerufen, um initial die Datenbank zu laden
+ */
 function loadUsersFromFirebaseOnce() {
     if(!firebaseDB || typeof firebaseDB.ref !== 'function') {
         logger.warn('Firebase nicht bereit für Benutzerladen');
@@ -146,6 +169,10 @@ function loadUsersFromFirebaseOnce() {
     }
 }
 
+/**
+ * Startet einen permanenten Listener auf Benutzer-Änderungen in Firebase
+ * Wird nach dem initalen Load() aufgerufen, um Updates in Echtzeit zu bekommen
+ */
 function setupUserListener() {
     if(usersListenerActive || !firebaseDB || typeof firebaseDB.ref !== 'function') {
         if(usersListenerActive) {
@@ -207,6 +234,15 @@ function refreshUsersFromFirebase() {
     });
 }
 
+/**
+ * Authentifiziert einen Benutzer mit Benutzername und Passwort
+ * Versucht zuerst Firebase zu laden, dann zu authentifizieren,
+ * mit Fallback auf lokale Benutzer
+ * 
+ * @param {string} username - Der Benutzername
+ * @param {string} password - Das Passwort (plaintext - sollte in Produktion gehasht sein)
+ * @returns {Promise<boolean>} true wenn erfolgreich angemeldet, sonst false
+ */
 function authenticateUser(username, password) {
     // Zuerst versuchen, aktuellste Benutzer von Firebase zu laden
     return refreshUsersFromFirebase().then(() => {
@@ -256,6 +292,11 @@ function logoutUser() {
     logger.info('Benutzer abgemeldet');
 }
 
+/**
+ * Versucht eine gespeicherte Session wiederherzustellen
+ * Wird beim App-Start aufgerufen um automatisch den Benutzer anzumelden,
+ * falls eine gültige Session noch existiert
+ */
 function restoreSession() {
     const savedUser = localStorage.getItem('currentUser');
     if(savedUser) {
@@ -272,6 +313,9 @@ function restoreSession() {
     return false;
 }
 
+/**
+ * Erstellt einen neuen Benutzer mit angegebenem Benutzernamen, Passwort und Berechtigungen
+ */
 function createUser(username, password, permissions = []) {
     const users = getUsers();
     
@@ -298,6 +342,13 @@ function createUser(username, password, permissions = []) {
     return true;
 }
 
+/**
+ * Löscht einen existierenden Benutzer
+ * Der Admin-Benutzer kann nicht gelöscht werden
+ * 
+ * @param {string} username - Der zu löschende Benutzername
+ * @returns {boolean} true wenn gelöscht, false falls nicht gefunden oder admin
+ */
 function deleteUser(username) {
     const users = getUsers();
     
@@ -323,6 +374,14 @@ function deleteUser(username) {
     return false;
 }
 
+/**
+ * Aktualisiert die Berechtigungen eines Benutzers
+ * (welche Tabs/Seiten er sehen darf)
+ * 
+ * @param {string} username - Der Benutzer dessen Berechtigungen geändert werden
+ * @param {array} permissions - Neue Berechtigungen (Array von Tab-Namen)
+ * @returns {boolean} true wenn erfolgreich, false falls Benutzer nicht existiert
+ */
 function updateUserPermissions(username, permissions) {
     const users = getUsers();
     
@@ -343,21 +402,53 @@ function updateUserPermissions(username, permissions) {
     return false;
 }
 
-// Firebase Sync Flag
+// ============================================
+// FIREBASE SYNCHRONISIERUNG & TURNIER-STATUS
+// ============================================
+
+/**
+ * Flag ob Firebase-Synchronisierung aktiviert ist
+ * Wird true gesetzt wenn ein Event (Turnier) aktiv ist
+ */
 let firebaseSyncEnabled = false;
+
+/**
+ * Die aktuelle Event-ID (eindeutige Kennung für das aktuelle Turnier)
+ * Wird verwendet für Firebase-Pfade um mehrere Turniere zu unterstützen
+ */
 let currentEventId = null;
-// Callroom state: current Durchgang (group of 4 matches)
+
+/**
+ * Aktueller Durchgang (Gruppe von Gefechten) in der Callroom-Ansicht
+ * 0-based Index
+ */
 let callroomGroupIndex = 0;
-// Which round is shown in the Callroom (0-based)
+
+/**
+ * Aktuelle Runde in der Callroom-Ansicht
+ * 0 = erste Runde (auch 64er KO), 1 = 32er KO, 2 = 16er KO, etc.
+ */
 let callroomRoundIndex = 0;
 
-// 2. Fencers-Datenbank laden
-let fencersDB = {};
-let koTreeState = null;
+/**
+ * ============================================
+ * OFFLINE-STATUS UND LOGGING
+ * ============================================
+ * 
+ * Die App funktioniert auch offline. Diese Variablen und Funktionen
+ * überwachen die Online/Offline-Status und loggen wichtige Ereignisse
+ */
 
-// 3. Offline Status Überwachung
+/**
+ * Flag ob die App aktuell offline ist
+ * true wenn kein Internet verfügbar ist
+ */
 let isOffline = !navigator.onLine;
 
+/**
+ * Aktualisiert den Offline-Indikator in der UI
+ * Der Indikator wird angezeigt wenn die App offline ist
+ */
 function updateOfflineIndicator() {
     const offlineIndicator = document.getElementById('offline-indicator');
     if (!offlineIndicator) return;
@@ -371,7 +462,7 @@ function updateOfflineIndicator() {
     }
 }
 
-// Event Listener für Online/Offline Status
+// Event Listener für Online/Offline Status Änderungen
 window.addEventListener('online', () => {
     logger.info('App ist wieder online');
     updateOfflineIndicator();
@@ -382,23 +473,46 @@ window.addEventListener('offline', () => {
     updateOfflineIndicator();
 });
 
-// Simple logging utility (timestamps + optional storage)
+/**
+ * ============================================
+ * LOGGING SYSTEM (für Fehlerbehandlung)
+ * ============================================
+ * 
+ * Ein einfaches Logging-System das alle Events aufzeichnet.
+ * Logs können heruntergeladen oder angesehen werden für Debugging.
+ */
+
+/**
+ * Ein Puffer um die letzten Log-Einträge im Speicher zu halten
+ */
 const logBuffer = [];
 const MAX_LOG_BUFFER = 500;
 const logger = {
+    /**
+     * Interner Log-Push Funktion
+     * @param {string} level - Log-Level (INFO, WARN, ERROR)
+     * @param {array} args - Die Log-Argumente
+     */
     push(level, args) {
         const ts = new Date().toISOString();
         const msg = [ts, level].concat(Array.from(args));
-        // write to console
+        
+        // Schreibe in Browser-Konsole (für Entwicklung)
         if(level === 'ERROR') console.error.apply(console, msg);
         else if(level === 'WARN') console.warn.apply(console, msg);
         else console.log.apply(console, msg);
 
-        // store in buffer
-        logBuffer.push({ts, level, message: args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')});
+        // Speichere im Buffer
+        logBuffer.push({
+            ts, 
+            level, 
+            message: args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')
+        });
+        
+        // Halte Buffer begrenzt
         if(logBuffer.length > MAX_LOG_BUFFER) logBuffer.shift();
 
-        // Auto-persist errors to localStorage (per event)
+        // Auto-persistiere Fehler zu localStorage (pro Event)
         try {
             if(level === 'ERROR') {
                 const keyName = 'appLogs_' + (currentEventId || 'local');
@@ -406,6 +520,12 @@ const logger = {
             }
         } catch(e) { /* ignore persistence errors */ }
     },
+    
+    /**
+     * Info Log (grün - normale Ereignisse)
+     * Warn Log (orange - Warnungen)
+     * Error Log (rot - Fehler)
+     */
     info(...args) { this.push('INFO', args); },
     warn(...args) { this.push('WARN', args); },
     error(...args) { this.push('ERROR', args); },
@@ -413,13 +533,42 @@ const logger = {
     persist(key='appLogs') { try { localStorage.setItem(key, JSON.stringify(logBuffer)); } catch(e) { /* ignore */ } }
 };
 
+/**
+ * ============================================
+ * FECHTER-DATENBANK (Ringer/Fencer-Liste)
+ * ============================================
+ * 
+ * Die Fechter-Datenbank enthält alle Informationen über die Teilnehmer
+ * Sie wird aus einer XML-Datei (fencers.xml) geladen
+ */
+
+/**
+ * Lokale Fechter-Datenbank
+ * Format: { fencerId: { id, prenom, nom, nation }, ... }
+ */
+let fencersDB = {};
+
+/**
+ * Der KO-Baum-Status für das aktuelle Turnier
+ * Format komplex - siehe generateKOTree() für Details
+ */
+let koTreeState = null;
+
+/**
+ * Lädt die Fechter-Datenbank aus der fencers.xml Datei
+ * Diese Funktion wird beim App-Start aufgerufen
+ */
 async function loadFencersDatabase() {
     try {
+        // Lade XML-Datei vom Server
         const response = await fetch('./fencers.xml');
         const xmlText = await response.text();
+        
+        // Parse die XML
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
         
+        // Extrahiere alle Fechter-Einträge
         const fencers = xmlDoc.getElementsByTagName('Tireur');
         for(let i = 0; i < fencers.length; i++) {
             const f = fencers[i];
@@ -441,12 +590,32 @@ function getFencerById(id) {
     return fencersDB[id] || null;
 }
 
+/**
+ * Erzeugt einen angezeigbaren String für einen Fechter
+ * Format: "Vorname Nachname (Land)"
+ * 
+ * @param {Object} fencer - Der Fechter-Object
+ * @returns {string} Formatierter Anzeigestring oder "—" wenn null
+ */
 function getFencerDisplay(fencer) {
     if(!fencer) return '—';
     return `${fencer.prenom} ${fencer.nom} (${fencer.nation})`;
 }
 
-// 3. Modus-Management (Einzel/Team)
+/**
+ * ============================================
+ * TURNIER-MODUS (Einzel vs Team)
+ * ============================================
+ * 
+ * Die App unterstützt zwei Turniermodi:
+ * - Einzel (64er KO): Einzelne Fechter
+ * - Team (16er KO): 4er Teams
+ */
+
+/**
+ * Der aktuelle Modus: 'einzel' oder 'team'
+ * Wird in localStorage gespeichert um über Sessions persistiert zu werden
+ */
 let currentMode = localStorage.getItem('tableauMode') || 'einzel';
 
 function setTableauMode(mode) {
@@ -459,9 +628,19 @@ function getTableauMode() {
     return currentMode;
 }
 
-// ============================================
-// BAHN-VERWALTUNG (5 Bahnen)
-// ============================================
+/**
+ * ============================================
+ * BAHN-VERWALTUNG (bis zu 5 Bahnen)
+ * ============================================
+ * 
+ * Ein "Gefecht" findet auf einer "Bahn" statt
+ * Es gibt 5 Bahnen mit verschiedenen Farben und Namen
+ */
+
+/**
+ * Standard-Bahnfarben (5 Stück)
+ * Jede Bahn hat eine eigene Farbe
+ */
 const defaultLaneColors = ['#FF0000', '#0000FF', '#FFFF00', '#00FF00', '#FF00FF'];
 const defaultLaneNames = ['Bahn 1', 'Bahn 2', 'Bahn 3', 'Bahn 4', 'Bahn 5'];
 
@@ -469,6 +648,12 @@ const defaultLaneNames = ['Bahn 1', 'Bahn 2', 'Bahn 3', 'Bahn 4', 'Bahn 5'];
 const manualLaneColors = defaultLaneColors;
 const manualLaneNames = defaultLaneNames;
 
+/**
+ * Holt die aktuellen Bahnfarben
+ * Gibt gespeicherte Farben zurück oder Standard falls nichts gespeichert
+ * 
+ * @returns {array} Array von Hexadezimal-Farb-Codes
+ */
 function getLaneColors() {
     const saved = localStorage.getItem('laneColors');
     if(saved) {
@@ -482,6 +667,11 @@ function getLaneColors() {
     return defaultLaneColors;
 }
 
+/**
+ * Speichert neue Bahnfarben
+ * 
+ * @param {array} colors - Array von Farb-Codes
+ */
 function setLaneColors(colors) {
     localStorage.setItem('laneColors', JSON.stringify(colors));
     logger.info('Bahnfarben gespeichert:', colors);
@@ -490,6 +680,11 @@ function setLaneColors(colors) {
     }
 }
 
+/**
+ * Holt die aktuellen Bahnnamen
+ * 
+ * @returns {array} Array von Bahnnamen
+ */
 function getLaneNames() {
     const saved = localStorage.getItem('laneNames');
     if(saved) {
@@ -503,6 +698,11 @@ function getLaneNames() {
     return defaultLaneNames;
 }
 
+/**
+ * Speichert neue Bahnnamen
+ * 
+ * @param {array} names - Array von Bahnnamen
+ */
 function setLaneNames(names) {
     localStorage.setItem('laneNames', JSON.stringify(names));
     logger.info('Bahnnamen gespeichert:', names);
@@ -511,10 +711,24 @@ function setLaneNames(names) {
     }
 }
 
-// ============================================
-// FIREBASE SYNCHRONISIERUNGS-FUNKTIONEN
-// ============================================
+/**
+ * ============================================
+ * FIREBASE SYNCHRONISIERUNG (MULTI-DEVICE)
+ * ============================================
+ * 
+ * Diese Funktionen synchronisieren Turnier-Daten mehrmals pro Sekunde
+ * über Firebase Realtime Database zwischen verschiedenen Geräten.
+ * 
+ * Dadurch können mehrere Benutzer das gleiche Turnier live überwachen/steuern.
+ */
 
+/**
+ * Initialisiert Firebase Synchronisierung für ein spezifisches Event/Turnier
+ * Startet Listener auf allen wichtigen Daten die sich ändern könnten
+ * 
+ * @param {string} eventId - Eindeutige Event-ID
+ * @returns {boolean} true wenn erfolgreich initialisiert
+ */
 function initializeFirebaseSync(eventId) {
     if(!firebaseDB) {
         logger.error('Firebase nicht initialisiert');
@@ -525,7 +739,10 @@ function initializeFirebaseSync(eventId) {
     firebaseSyncEnabled = true;
     logger.info('Firebase Sync aktiviert für Event:', eventId);
     
-    // Höre auf Änderungen am KO-Baum
+    /**
+     * Höre auf Änderungen am KO-Baum (bei Siegerangabe)
+     * Wird sofort allen anderen Geräten angezeigt
+     */
     const treeRef = firebaseDB.ref(`events/${eventId}/koTree`);
     treeRef.on('value', (snapshot) => {
         if(snapshot.exists()) {
@@ -544,7 +761,9 @@ function initializeFirebaseSync(eventId) {
         logger.error('Fehler beim Laden KO-Baum:', error);
     });
     
-    // Höre auf Änderungen an Bahnfarben
+    /**
+     * Höre auf Änderungen an Bahnfarben
+     */
     const colorsRef = firebaseDB.ref(`events/${eventId}/laneColors`);
     colorsRef.on('value', (snapshot) => {
         if(snapshot.exists()) {
@@ -558,7 +777,9 @@ function initializeFirebaseSync(eventId) {
         }
     });
     
-    // Höre auf Änderungen an Bahnnamen
+    /**
+     * Höre auf Änderungen an Bahnnamen
+     */
     const namesRef = firebaseDB.ref(`events/${eventId}/laneNames`);
     namesRef.on('value', (snapshot) => {
         if(snapshot.exists()) {
@@ -572,7 +793,10 @@ function initializeFirebaseSync(eventId) {
         }
     });
 
-    // Höre auf Änderungen an Callroom-Status (synchronisiert Abwesend/Anwesend/kontrolliert)
+    /**
+     * Höre auf Änderungen an Anwesenheits-Status
+     * (Status: Abwesend, Anwesend, kontrolliert)
+     */
     const statusesRef = firebaseDB.ref(`events/${eventId}/callroomStatuses`);
     statusesRef.on('value', (snapshot) => {
         if(snapshot.exists()) {
@@ -583,7 +807,9 @@ function initializeFirebaseSync(eventId) {
         }
     });
 
-    // Höre auf Änderungen am Zeitplan (Startzeiten je Durchgang)
+    /**
+     * Höre auf Änderungen am Zeitplan (Startzeiten je Durchgang)
+     */
     const scheduleRef = firebaseDB.ref(`events/${eventId}/callroomSchedule`);
     scheduleRef.on('value', (snapshot) => {
         if(snapshot.exists()) {
@@ -598,6 +824,12 @@ function initializeFirebaseSync(eventId) {
     return true;
 }
 
+/**
+ * Synchronisiert den KO-Baum zu Firebase
+ * Wird aufgerufen nach jeder Änderung (z.B. wenn Sieger eingetragen wird)
+ * 
+ * @param {Object} koTree - Der KO-Baum der synchronisiert werden soll
+ */
 function syncKOTreeToFirebase(koTree) {
     if(!currentEventId) {
         logger.warn('syncKOTreeToFirebase: Keine Event ID');
@@ -618,6 +850,11 @@ function syncKOTreeToFirebase(koTree) {
         .catch(error => logger.error('✗ Fehler beim Synchronisieren des KO-Baums:', error));
 }
 
+/**
+ * Synchronisiert Anwesenheits-Status zu Firebase
+ * 
+ * @param {Object} statuses - Status-Objekt mit Anwesenheitsinformationen
+ */
 function syncCallroomStatusesToFirebase(statuses) {
     if(!currentEventId) {
         logger.warn('syncCallroomStatusesToFirebase: Keine Event ID');
@@ -638,6 +875,11 @@ function syncCallroomStatusesToFirebase(statuses) {
         .catch(error => logger.error('✗ Fehler beim Synchronisieren des Callroom-Status:', error));
 }
 
+/**
+ * Synchronisiert Zeitplan (Startzeiten) zu Firebase
+ * 
+ * @param {Object} schedule - Zeitplan-Objekt
+ */
 function syncCallroomScheduleToFirebase(schedule) {
     if(!currentEventId) {
         logger.warn('syncCallroomScheduleToFirebase: Keine Event ID');
@@ -658,6 +900,11 @@ function syncCallroomScheduleToFirebase(schedule) {
         .catch(error => logger.error('✗ Fehler beim Synchronisieren des Zeitplans:', error));
 }
 
+/**
+ * Synchronisiert Bahnfarben zu Firebase
+ * 
+ * @param {array} colors - Array von Farb-Codes
+ */
 function syncLaneColorsToFirebase(colors) {
     if(!currentEventId) {
         logger.warn('syncLaneColorsToFirebase: Keine Event ID');
@@ -678,6 +925,11 @@ function syncLaneColorsToFirebase(colors) {
         .catch(error => logger.error('✗ Fehler beim Synchronisieren der Bahnfarben:', error));
 }
 
+/**
+ * Synchronisiert Bahnnamen zu Firebase
+ * 
+ * @param {array} names - Array von Bahnnamen
+ */
 function syncLaneNamesToFirebase(names) {
     if(!currentEventId) {
         logger.warn('syncLaneNamesToFirebase: Keine Event ID');
@@ -698,6 +950,12 @@ function syncLaneNamesToFirebase(names) {
         .catch(error => logger.error('✗ Fehler beim Synchronisieren der Bahnnamen:', error));
 }
 
+/**
+ * Synchronisiert Tableau-Werte (gesamte Fechter-Liste) zu Firebase
+ * 
+ * @param {array} values - Array von Fechter-IDs
+ * @param {string} mode - Der Modus (einzel oder team)
+ */
 function syncTableauValuesToFirebase(values, mode) {
     if(!currentEventId) {
         logger.warn('syncTableauValuesToFirebase: Keine Event ID');
@@ -722,6 +980,15 @@ function syncTableauValuesToFirebase(values, mode) {
         .catch(error => logger.error('✗ Fehler beim Synchronisieren der Tableauwerte:', error));
 }
 
+/**
+ * Berechnet welche Bahn für ein spezifisches Gefecht verwendet wird
+ * Im 64er KO: 8 Gefechte pro Bahn
+ * Im 16er KO: 2 Gefechte pro Bahn
+ * 
+ * @param {number} match - Die Match-Nummer
+ * @param {string} mode - Der Modus (einzel oder team)
+ * @returns {number} Die Bahn-Nummer (0-3)
+ */
 function getLaneForMatch(match, mode) {
     // Berechne welche Bahn für dieses Gefecht
     // Im 64er KO: 8 Gefechte pro Bahn (32 Gefechte / 4 Bahnen)
@@ -730,37 +997,59 @@ function getLaneForMatch(match, mode) {
     return Math.floor(match / matchesPerLane);
 }
 
-// 4. KO-Baum Generator
+/**
+ * ============================================
+ * KO-BAUM GENERATOR
+ * ============================================
+ * 
+ * Generiert die Struktur eines KO-Baums
+ * Für Single Elimination (ein Verlust = ausgeschieden)
+ */
+
+/**
+ * Generiert eine leere KO-Baum-Struktur
+ * Der Baum kann dann mit Fechtern gefüllt werden
+ * 
+ * @param {number} participants - Anzahl der Teilnehmer (64 oder 16)
+ * @param {string} mode - Der Modus (einzel oder team)
+ * @returns {Object} Der KO-Baum-Object mit Runden und Gefechten
+ */
 function generateKOTree(participants, mode) {
     const tree = {
-        totalRounds: Math.ceil(Math.log2(participants)),
+        totalRounds: Math.ceil(Math.log2(participants)),  // Anzahl der Runden berechnen
         rounds: [],
-        consolationRounds: [],
+        consolationRounds: [],  // Für Platzierungsgefechte (nur im 16er Team)
         mode: mode
     };
     
-    // Initialisiere alle Runden des Hauptturniers
+    /**
+     * Initialisiere alle Runden des Hauptturniers
+     * Runde 1 hat die meisten Gefechte, letzte Runde (Finale) hat 1 Gefecht
+     */
     for(let round = 0; round < tree.totalRounds; round++) {
         const matchesInRound = Math.pow(2, tree.totalRounds - round - 1);
         tree.rounds[round] = [];
         for(let match = 0; match < matchesInRound; match++) {
             tree.rounds[round].push({
                 id: `round-${round}-match-${match}`,
-                p1: null,
-                p2: null,
-                winner: null,
+                p1: null,        // Fechter 1
+                p2: null,        // Fechter 2
+                winner: null,    // Sieger (wird gesetzt wenn Gefecht zuende)
                 laneOverride: null  // Für manuelle Bahnänderung
             });
         }
     }
     
-    // Für 16er KO (Team): Platzierungsgefechte
-    // - Verlierer Viertelfinale (8er KO) spielen um Plätze 5-8
-    // - Verlierer Halbfinale spielen um Platz 3/4
+    /**
+     * Für 16er KO (Team): Platzierungsgefechte
+     * Um Platzierungen 3-8 zu kämpfen wer welche Medaille bekommt
+     * Verlierer des Halbfinals fechten um Platz 3/4
+     * Verlierer des Viertelfinals fechten um Plätze 5-8
+     */
     if(mode === 'team' && participants === 16) {
         // Platz 5-8 Halbfinals (Verlierer der Viertelfinals)
         tree.consolationRounds.push({
-            title: 'Platz 5-8 (HF)',
+            title: 'Platz 5-8',
             matches: [{
                 id: 'consolation-5-8-hf-0',
                 p1: null,
@@ -808,6 +1097,14 @@ function generateKOTree(participants, mode) {
     return tree;
 }
 
+/**
+ * Füllt die erste Runde des KO-Baums mit Fechtern
+ * In einem KO-System wird so gepaart: 1 gegen 64, 2 gegen 63, etc. (umgekehrte Reihenfolge)
+ * 
+ * @param {Object} koTree - Der KO-Baum Object (wird modifiziert)
+ * @param {array} fencerIds - Array von Fechter-IDs in Reihenfolge
+ * @param {string} mode - Der Modus (einzel oder team)
+ */
 function populateKOTreeFirstRound(koTree, fencerIds, mode) {
     // Erste Runde: 1vs64, 2vs63, ... (bei Einzel) oder 1vs16, 2vs15, ... (bei Team)
     const matchCount = mode === 'einzel' ? 32 : 8;
@@ -3117,38 +3414,109 @@ function onQRCodeScanned(decodedText) {
     }
 }
 
-// Hilfsfunktion: URL Parameter lesen und Auto-Join
+/**
+ * Prüft ob eine Event-ID in der URL vorhanden ist
+ * Diese Funktion wird verwendet wenn ein Benutzer einen QR-Code-Link öffnet
+ * Format: ?eventId=event_1234567890
+ * 
+ * Wenn eine Event-ID gefunden wird:
+ * - Sie wird in localStorage gespeichert
+ * - Firebase Synchronisierung wird automatisch für dieses Event aktiviert
+ * - Andere Benutzer mit der gleichen Event-ID können das gleiche Turnier sehen
+ * 
+ * Dies ermöglicht es mehreren Geräten automatisch auf das gleiche Turnier verbunden zu werden
+ */
 function checkEventIdFromUrl() {
+    // Extrahiere URL-Parameter
     const params = new URLSearchParams(window.location.search);
     const eventIdFromUrl = params.get('eventId');
-    
+
+    // Prüfe ob Event-ID in URL vorhanden ist UND keine lokale Event-ID bereits aktuell ist
     if(eventIdFromUrl && !localStorage.getItem('currentEventId')) {
         logger.info('Event-ID aus URL erkannt:', eventIdFromUrl);
+        
+        // Speichere die Event-ID lokal
         localStorage.setItem('currentEventId', eventIdFromUrl);
         currentEventId = eventIdFromUrl;
-        
+
+        // Starte Firebase Sync für dieses Event
         if(firebaseDB) {
+            // Warte kurz bis Firebase initialisiert ist
             setTimeout(() => initializeFirebaseSync(eventIdFromUrl), 500);
         }
     }
 }
 
-// Hilfsfunktion: In Zwischenablage kopieren
+/**
+ * Kopiert einen Text in die Zwischenablage des Benutzers
+ * Dies wird hauptsächlich verwendet um QR-Code Event-Links zu teilen
+ * und anderen Benutzern einen einfachen Zugang zum gleichen Turnier zu ermöglichen
+ * 
+ * @param {string} text - Der Text der kopiert werden soll (z.B. eine vollständige URL mit Event-ID)
+ */
 function copyToClipboard(text) {
+    // Schreibe den Text in die Zwischenablage
     navigator.clipboard.writeText(text).then(() => {
+        // Bestätige dem Benutzer dass der Text kopiert wurde
         alert('Link kopiert!');
     });
 }
 
-// Lade Datenbank beim Start
+/**
+ * ============================================
+ * INITIALIZATION SEQUENCE (BEIM APP-START)
+ * ============================================
+ * 
+ * Diese Schritte werden in Reihenfolge ausgeführt um die App zu starten
+ */
+
+/**
+ * Schritt 1: Initialisiere die Benutzerverwaltung
+ * - Lädt alle Benutzer aus localStorage
+ * - Erstellt einen Standard-Admin wenn keine Benutzer existieren
+ * - Versucht Benutzer von Firebase zu laden (asynchron mit Fallback)
+ */
 initializeUsers();
+
+/**
+ * Schritt 2: Lade die Fechter-Datenbank
+ * - Liest die fencers.xml Datei vom Server
+ * - Parst alle Fechter-Informationen
+ * - Speichert sie im fencersDB Object für schnelle Zugriffe
+ * 
+ * Dies wird asynchron ausgeführt und die Anwendung wartet NICHT darauf
+ * Die Daten sind verfügbar wenn ein Tableau geladen wird
+ */
 loadFencersDatabase();
+
+/**
+ * Schritt 3: Versuche eine gespeicherte Session wiederherzustellen
+ * - Prüft ob ein Benutzer in localStorage gespeichert ist
+ * - Falls ja: Melde diesen Benutzer automatisch an (ohne Passwort)
+ * - Dies ermöglicht es Benutzern nach einem Reload automatisch angemeldet zu bleiben
+ */
 restoreSession();
 
-// Prüfe ob Event-ID in URL ist
+/**
+ * Schritt 4: Prüfe ob eine Event-ID in der URL vorhanden ist
+ * - Dies wird verwendet wenn ein Benutzer einen QR-Code-Link öffnet
+ * - Falls Event-ID vorhanden: Verbinde automatisch zu diesem Turnier
+ * - Andere Geräte mit der gleichen Event-ID können dann Echtzeitdaten teilen
+ */
 checkEventIdFromUrl();
 
-// Initialisiere Lane-Einstellungen mit 4 Bahnen als Standard
+/**
+ * Initialisiert oder migriert die Bahnfarben- und Bahnnamen-Einstellungen
+ * 
+ * BEIM ERSTEN START:
+ * - Speichert 5 Standard-Bahnen (rot, blau, gelb, grün, magenta) in localStorage
+ * 
+ * BEI MIGRATION:
+ * - Prüft ob ein altes 4-Bahnen-System verwendet wurde
+ * - Konvertiert automatisch auf die neue 5-Bahnen-Struktur
+ * 
+ * Dies ist wichtig für die Verwaltung von Fechttischen und deren visuellen Kennzeichnung
+ */
 function initializeLaneSettings() {
     // Prüfe ob Bahnen-Einstellung vorhanden ist
     const savedColors = localStorage.getItem('laneColors');
@@ -3164,12 +3532,15 @@ function initializeLaneSettings() {
         try {
             const colors = JSON.parse(savedColors);
             const names = JSON.parse(savedNames);
+            
+            // Wenn noch die alte 4-Bahnen Struktur vorhanden ist, aktualisiere auf 5
             if(colors.length === 4 && names.length === 4) {
                 localStorage.setItem('laneColors', JSON.stringify(defaultLaneColors));
                 localStorage.setItem('laneNames', JSON.stringify(defaultLaneNames));
                 logger.info('Lane-Einstellungen aktualisiert von 4 auf 5 Bahnen');
             }
         } catch(e) {
+            // Fehler beim Parsen oder Migrieren - verwende Defaults
             logger.error('Fehler beim Aktualisieren der Lane-Einstellungen:', e);
         }
     }
@@ -3177,10 +3548,24 @@ function initializeLaneSettings() {
 
 initializeLaneSettings();
 
-// Mache setupUserListener global verfügbar
+/**
+ * ============================================
+ * EXPOSE INTERNAL FUNCTIONS TO GLOBAL SCOPE
+ * ============================================
+ * 
+ * Diese Funktionen werden global verfügbar gemacht damit sie von
+ * verschiedenen Teilen der App aufgerufen werden können
+ */
+
+// Ermögliche das Starten des Benutzer-Listeners von außen
 window.setupUserListener = setupUserListener;
+
+// Ermögliche das Aktualisieren der Benutzerliste von außen
 window.refreshUsersFromFirebase = refreshUsersFromFirebase;
 
 // Initial die Startseite laden
 navigate('home');
+
+// Aktualisiere die Navigations-Buttons basierend auf Benutzer-Berechtigungen
+// Dies versteckt Tabs die der aktuelle Benutzer nicht sehen darf
 updateNavigationButtons();

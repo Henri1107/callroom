@@ -1,5 +1,9 @@
 // Service Worker für Offline-Funktionalität
 const CACHE_NAME = 'callroom-v1';
+
+
+// Liste der Dateien, die zwischengespeichert werden sollen
+
 const urlsToCache = [
     './',
     './index.html',
@@ -9,22 +13,34 @@ const urlsToCache = [
     './fencers.xml'
 ];
 
-// Install: Cache alle wichtigen Dateien
+/**
+ * INSTALL EVENT
+ * Wird ausgelöst, wenn der Service Worker zum ersten Mal registriert wird
+ * Hier laden wir alle wichtigen Dateien in den Cache
+ */
 self.addEventListener('install', event => {
     console.log('Service Worker: Install-Event');
+    
+    // waitUntil: Warte bis dieser Code fertig ist, bevor du den Service Worker aktivierst
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
                 console.log('Service Worker: Cache geöffnet');
                 return cache.addAll(urlsToCache);
             })
+            // skipWaiting: Aktiviere service worker sofort, nicht erst beim nächsten Seite-Refresh
             .then(() => self.skipWaiting())
     );
 });
 
-// Activate: Alte Caches löschen und Claims
+/**
+ * ACTIVATE EVENT
+ * Wird ausgelöst, wenn der Service Worker aktiviert wird
+ * Hier können wir alte Version-Caches löschen
+ */
 self.addEventListener('activate', event => {
     console.log('Service Worker: Activate-Event');
+    
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
@@ -35,20 +51,26 @@ self.addEventListener('activate', event => {
                     }
                 })
             );
-        }).then(() => self.clients.claim())
+        }).then(() => self.clients.claim()) // Kontrolliere alle Clients sofort
     );
 });
 
-// Fetch: Network-first, dann Cache fallback
+/**
+ * FETCH EVENT
+ * Wird für jeden HTTP-Request ausgelöst (wenn die App Dateien vom Server anfordert)
+ * Hier implementieren wir die Strategie: "Network First, Cache Fallback"
+ * = Versuche zuerst vom Internet zu laden, bei Fehler nutze Cache
+ */
 self.addEventListener('fetch', event => {
     const { request } = event;
     
-    // Ignoriere fremde Requests
+    // Ignoriere Requests von fremden Websites (nur eigen Domain cachen)
     if(!request.url.startsWith(self.location.origin)) {
         return;
     }
     
     event.respondWith(
+        // Versuche den Request übers Netz zu laden
         fetch(request)
             .then(response => {
                 // Erfolgreiche Response: In Cache speichern
@@ -61,7 +83,7 @@ self.addEventListener('fetch', event => {
                 return response;
             })
             .catch(() => {
-                // Fehler/Offline: Aus Cache laden
+                // FEHLER oder OFFLINE: Versuche aus dem Cache zu laden
                 return caches.match(request)
                     .then(response => {
                         if(response) {
